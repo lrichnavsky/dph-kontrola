@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DPH Kontrola — tpCloud</title>
+<style>
+:root {
+  --bg:#f7f7f5;--surface:#fff;--border:#e2e2de;--border-s:#c8c8c2;
+  --text:#1a1a18;--muted:#6b6b65;--accent:#2a5fd4;--accent-bg:#eef2fc;
+  --ok:#1a7a4a;--ok-bg:#edf7f1;--warn:#b45309;--warn-bg:#fef3e2;
+  --err:#c0392b;--err-bg:#fdf0ef;--mono:'Courier New',monospace;--r:6px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+header{background:#1a1a18;color:#fff;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:50px;position:sticky;top:0;z-index:100;border-bottom:2px solid #2a5fd4}
+.brand{font-weight:800;font-size:15px;letter-spacing:.05em}
+.sub{font-size:11px;color:rgba(255,255,255,.4);margin-left:10px}
+.hbtns{display:flex;gap:8px;align-items:center}
+.auth-status{font-size:11px;padding:3px 10px;border-radius:10px;font-weight:600}
+.auth-status.ok{background:var(--ok-bg);color:var(--ok)}
+.auth-status.no{background:var(--err-bg);color:var(--err)}
+.btn{padding:5px 14px;border-radius:var(--r);border:1.5px solid rgba(255,255,255,.2);background:transparent;color:#fff;cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.03em;transition:background .15s;white-space:nowrap}
+.btn:hover{background:rgba(255,255,255,.12)}
+.btn.primary{background:var(--accent);border-color:var(--accent)}
+.btn.primary:hover{background:#1e4db5}
+.btn.ok-btn{background:var(--ok);border-color:var(--ok)}
+.btn.ok-btn:hover{background:#155d37}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+main{max-width:1060px;margin:0 auto;padding:24px 20px 60px}
+.card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);margin-bottom:16px;overflow:hidden}
+.card-head{padding:11px 18px;border-bottom:1.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:#fafaf8}
+.card-title{font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card-body{padding:18px}
+/* STEPS */
+.steps{display:flex;gap:0;margin-bottom:18px;border-bottom:2px solid var(--border);overflow-x:auto}
+.step{padding:10px 16px;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;display:flex;align-items:center;gap:6px;transition:color .15s}
+.step:hover{color:var(--text)}
+.step.active{color:var(--accent);border-bottom-color:var(--accent)}
+.step.done{color:var(--ok)}
+.pill{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-size:10px;background:var(--border);color:var(--muted);font-weight:700}
+.step.active .pill{background:var(--accent);color:#fff}
+.step.done .pill{background:var(--ok);color:#fff}
+/* GRID */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:680px){.grid2,.grid3{grid-template-columns:1fr}}
+/* FIELDS */
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.field input,.field select{padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);color:var(--text);outline:none;transition:border-color .15s;font-family:inherit}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+/* FILE LIST */
+.file-list{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+.fi{display:flex;align-items:center;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--bg);gap:8px}
+.fi.current{border-color:var(--ok);background:var(--ok-bg)}
+.fi.loading{opacity:.6}
+.fi-badge{padding:2px 6px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.fi-badge.hist{background:#f0f0ea;color:var(--muted)}
+.fi-badge.cur{background:var(--ok-bg);color:var(--ok)}
+.fi-name{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);font-size:11px}
+.fi-meta{color:var(--muted);font-size:11px;white-space:nowrap}
+.fi-rm{cursor:pointer;color:var(--muted);padding:0 4px;line-height:1;font-size:16px}
+.fi-rm:hover{color:var(--err)}
+/* DROP */
+.drop-zone{border:2px dashed var(--border-s);border-radius:var(--r);padding:18px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;position:relative}
+.drop-zone:hover,.drop-zone.over{border-color:var(--accent);background:var(--accent-bg)}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.drop-zone.has-file{border-color:var(--ok);background:var(--ok-bg)}
+/* LOG */
+.log{font-family:var(--mono);font-size:11px;line-height:1.9;padding:10px 12px;background:#1a1a18;color:#d4d4d4;border-radius:var(--r);max-height:150px;overflow-y:auto;margin-top:10px}
+.log .ok{color:#6ec9a0}.log .err{color:#f48771}.log .warn{color:#f9c74f}.log .info{color:#9cdcfe}
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+@media(max-width:680px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{border:1.5px solid var(--border);border-radius:var(--r);padding:12px 14px}
+.stat .sv{font-size:24px;font-weight:800;line-height:1}
+.stat .sl{font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.04em}
+.stat.ok{border-color:var(--ok);background:var(--ok-bg)}.stat.ok .sv{color:var(--ok)}
+.stat.warn{border-color:#f59e0b;background:var(--warn-bg)}.stat.warn .sv{color:var(--warn)}
+.stat.err{border-color:var(--err);background:var(--err-bg)}.stat.err .sv{color:var(--err)}
+/* TABLE */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f2f2ee;padding:7px 9px;text-align:left;font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid var(--border);white-space:nowrap}
+td{padding:6px 9px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr.tr-dc td{background:#fff5f5}
+tr.tr-ds td{background:#fffbf0}
+.badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.03em}
+.badge.ok{background:var(--ok-bg);color:var(--ok)}
+.badge.dc{background:var(--err-bg);color:var(--err)}
+.badge.ds{background:var(--warn-bg);color:var(--warn)}
+.mono{font-family:var(--mono)}.right{text-align:right}.muted{color:var(--muted)}
+/* TABS */
+.tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:12px}
+.tab-btn{padding:8px 14px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+/* XML */
+.xml-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:680px){.xml-grid{grid-template-columns:1fr}}
+.xml-card{border:1.5px solid var(--border);border-radius:var(--r);overflow:hidden}
+.xml-ch{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f7f7f5;border-bottom:1.5px solid var(--border)}
+.xml-ct{font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.xml-pre{font-family:var(--mono);font-size:10px;color:#334;white-space:pre;overflow-x:auto;padding:10px 12px;max-height:260px;overflow-y:auto;background:#fcfcfa;line-height:1.7}
+.dl-btn{padding:4px 10px;border-radius:var(--r);background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:11px;font-weight:700}
+.dl-btn:hover{background:#1e4db5}
+/* ALERT */
+.alert{padding:9px 12px;border-radius:var(--r);border-left:4px solid;margin-bottom:10px;font-size:12px}
+.alert.info{background:var(--accent-bg);border-color:var(--accent);color:#1e3d8a}
+.alert.ok{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
+.alert.err{background:var(--err-bg);border-color:var(--err);color:var(--err)}
+.alert.warn{background:var(--warn-bg);border-color:#f59e0b;color:var(--warn)}
+/* DPH blok */
+.dph-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:600px){.dph-grid{grid-template-columns:1fr}}
+.dph-blk{background:var(--bg);border-radius:var(--r);border:1.5px solid var(--border);overflow:hidden}
+.dph-blk-h{padding:7px 10px;font-weight:700;font-size:10px;background:var(--text);color:#fff;letter-spacing:.06em;text-transform:uppercase}
+.dph-blk table{width:100%}
+.dph-blk td{font-size:12px}
+.dph-blk td:last-child{text-align:right;font-family:var(--mono)}
+.dph-blk tr.tot td{font-weight:800;border-top:2px solid var(--border-s)}
+/* SECURITY INFO */
+.sec-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:10px;background:var(--ok-bg);color:var(--ok);font-size:11px;font-weight:700;border:1.5px solid #b3dfc5}
+.hidden{display:none!important}
+/* SPINNER */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid rgba(0,0,0,.15);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px}
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center">
+    <span class="brand">DPH KONTROLA</span>
+    <span class="sub">tpCloud — AbraFlexi</span>
+  </div>
+  <div class="hbtns">
+    <span class="sec-badge" title="Data neprochází žádným třetím serverem — vše běží přímo mezi browserem a SharePointem přes Microsoft Graph API">🔒 Pouze M365</span>
+    <span id="authStatus" class="auth-status no">Nepřihlášen</span>
+    <button class="btn" onclick="msalLogin()">Přihlásit M365</button>
+    <button class="btn" onclick="clearAll()" style="border-color:rgba(255,255,255,.15)">Smazat vše</button>
+  </div>
+</header>
+
+<main>
+
+<div class="steps">
+  <div class="step active" id="step1" onclick="goStep(1)"><span class="pill">1</span>Přihlášení</div>
+  <div class="step" id="step2" onclick="goStep(2)"><span class="pill">2</span>Klient & nastavení</div>
+  <div class="step" id="step3" onclick="goStep(3)"><span class="pill">3</span>Soubory</div>
+  <div class="step" id="step4" onclick="goStep(4)"><span class="pill">4</span>Analýza</div>
+  <div class="step" id="step5" onclick="goStep(5)"><span class="pill">5</span>XML výstup</div>
+</div>
+
+<!-- ═══ PANE 1 — PŘIHLÁŠENÍ ═══ -->
+<div id="pane1">
+  <div class="card">
+    <div class="card-head"><span class="card-title">Microsoft 365 — přihlášení</span></div>
+    <div class="card-body">
+      <div class="alert info" style="margin-bottom:14px">
+        <b>🔒 Bezpečná architektura:</b> Aplikace přistupuje k SharePointu přímo přes Microsoft Graph API pomocí OAuth2 PKCE flow.
+        Data (dokladová čísla, základy DPH, DIČ) <b>nikdy neopouštějí M365 tenant</b> — neprochází žádným externím serverem.
+        Pouze XML výstup (jen číselné součty) se generuje lokálně v browseru.
+      </div>
+      <div class="grid2" style="margin-bottom:16px">
+        <div class="field">
+          <label>Azure App (Client ID)</label>
+          <input id="cfgClientId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" oninput="saveConfig()" style="font-family:var(--mono);font-size:12px">
+          <span style="font-size:11px;color:var(--muted);margin-top:3px">Aplikace musí být registrovaná v Azure AD s oprávněním <code>Files.Read.All</code> a <code>Sites.Read.All</code></span>
+        </div>
+        <div class="field">
+          <label>Tenant ID (nebo "common")</label>
+          <input id="cfgTenantId" value="common" oninput="saveConfig()" style="font-family:var(--mono);font-size:12px">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn primary" onclick="msalLogin()">🔑 Přihlásit se přes Microsoft</button>
+        <button class="btn" onclick="showAzureHelp()" style="color:var(--text);border-color:var(--border)">? Jak zaregistrovat app</button>
+      </div>
+      <div id="loginLog" class="log hidden"></div>
+      <div id="azureHelp" class="hidden" style="margin-top:14px">
+        <div class="alert info">
+          <b>Registrace Azure App (jednorázové nastavení):</b><br><br>
+          1. Otevři <a href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" style="color:var(--accent)">portal.azure.com → App registrations</a><br>
+          2. <b>New registration</b> → název "DPH Kontrola" → Account type: "Single tenant"<br>
+          3. Redirect URI: <code>Web</code> → <code id="redirectUriDisplay"></code><br>
+          4. Po vytvoření zkopíruj <b>Application (client) ID</b> a vlož sem<br>
+          5. <b>API permissions</b> → Add → Microsoft Graph → Delegated:<br>
+          &nbsp;&nbsp;&nbsp;• <code>Files.Read.All</code><br>
+          &nbsp;&nbsp;&nbsp;• <code>Sites.Read.All</code><br>
+          6. <b>Grant admin consent</b>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PANE 2 — KONFIGURACE KLIENTA ═══ -->
+<div id="pane2" class="hidden">
+  <div class="card">
+    <div class="card-head"><span class="card-title">Konfigurace klienta</span></div>
+    <div class="card-body">
+      <div class="grid3" style="margin-bottom:14px">
+        <div class="field">
+          <label>Kód agenty (pro SP cestu)</label>
+          <input id="cfgAgKod" placeholder="KMA" oninput="saveConfig()">
+          <span style="font-size:10px;color:var(--muted);margin-top:2px">Část cesty: .../Účetní agendy/<b>KMA</b> - .../</span>
+        </div>
+        <div class="field">
+          <label>Název firmy (část názvu složky)</label>
+          <input id="cfgFirma" placeholder="KM AVION" oninput="saveConfig()">
+        </div>
+        <div class="field">
+          <label>Rok DPH</label>
+          <select id="cfgRok" oninput="saveConfig()">
+            <option>2026</option><option>2025</option><option>2024</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Příjemce závazku (FÚ)</label>
+          <input id="cfgFU" value="Územní pracoviště pro Prahu 8" oninput="saveConfig()">
+        </div>
+        <div class="field">
+          <label>Číslo účtu FÚ</label>
+          <input id="cfgBanAcc" value="705-77628031" oninput="saveConfig()">
+        </div>
+        <div class="field">
+          <label>Kód banky</label>
+          <input id="cfgBanKod" value="0710" oninput="saveConfig()">
+        </div>
+        <div class="field">
+          <label>Řada závazku (AbraFlexi)</label>
+          <input id="cfgZavRada" value="OSTATNÍ ZÁVAZKY" oninput="saveConfig()">
+        </div>
+        <div class="field">
+          <label>Uživatel (AbraFlexi)</label>
+          <input id="cfgUser" value="office-tpcloud" oninput="saveConfig()">
+        </div>
+      </div>
+      <button class="btn primary" onclick="goStep(3);spLoadHistory()">Pokračovat a načíst historii →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PANE 3 — SOUBORY ═══ -->
+<div id="pane3" class="hidden">
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Historické soubory ze SharePointu</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="histCount" class="muted" style="font-size:11px"></span>
+        <button class="btn" style="color:var(--text);border-color:var(--border);font-size:11px" onclick="spLoadHistory()">↻ Obnovit</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="histLog" class="log hidden"></div>
+      <div id="histList" class="file-list" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Aktuální DPH soubor</span>
+      <span class="muted" style="font-size:11px">nahrát ručně nebo vybrat ze SP</span>
+    </div>
+    <div class="card-body">
+      <div style="margin-bottom:10px">
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <input id="spSearchQ" class="field input" placeholder="Hledat na SharePointu: název souboru..." style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')spSearchFile()">
+          <button class="btn primary" onclick="spSearchFile()">Hledat na SP</button>
+        </div>
+        <div id="spSearchResults" class="file-list"></div>
+      </div>
+      <div class="drop-zone" id="dz" ondragover="doDragOver(event)" ondragleave="doDragLeave()" ondrop="doDrop(event)">
+        <input type="file" id="fileInput" accept=".xlsx" onchange="handleLocalFile(this.files[0])">
+        <div style="font-size:20px;margin-bottom:4px">📂</div>
+        <div style="font-weight:600;font-size:13px">Přetáhněte XLSX nebo klikněte pro výběr</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Lokální soubor — data zůstanou v browseru</div>
+      </div>
+      <div id="currentFileDisplay" class="file-list" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end">
+    <button class="btn primary" id="btnRunAnalysis" onclick="goStep(4);runAnalysis()" disabled>Spustit analýzu →</button>
+  </div>
+</div>
+
+<!-- ═══ PANE 4 — ANALÝZA ═══ -->
+<div id="pane4" class="hidden">
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Výsledky kontroly duplicit</span>
+      <button class="btn" style="color:var(--text);border-color:var(--border);font-size:11px" onclick="exportCsv()">↓ Export CSV</button>
+    </div>
+    <div class="card-body">
+      <div id="statsBar" class="stats"></div>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="showTab('tAll')">Všechny doklady</button>
+        <button class="tab-btn" onclick="showTab('tDup')">Duplicity</button>
+        <button class="tab-btn" onclick="showTab('tDph')">Souhrn DPH</button>
+      </div>
+      <div id="tAll"><div class="tbl-wrap"><table><thead><tr>
+        <th>Stav</th><th>Modul</th><th>Interní č.</th><th>Datum ZD</th>
+        <th>Řádky DPH</th><th class="right">Sazba</th><th class="right">Základ Kč</th>
+        <th class="right">DPH Kč</th><th>Firma</th><th>Číslo došlé</th><th>Zdroj</th>
+      </tr></thead><tbody id="tAllBody"></tbody></table></div></div>
+      <div id="tDup" class="hidden"><div id="dupContent"></div></div>
+      <div id="tDph" class="hidden"><div id="dphContent"></div></div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:flex-end">
+    <button class="btn primary" onclick="goStep(5)">Generovat XML →</button>
+  </div>
+</div>
+
+<!-- ═══ PANE 5 — XML ═══ -->
+<div id="pane5" class="hidden">
+  <div id="xmlWarnDiv" class="alert err hidden">⚠ Aktuální DPH obsahuje duplicitní doklady — zkontrolujte před importem!</div>
+  <div class="xml-grid">
+    <div class="xml-card">
+      <div class="xml-ch"><span class="xml-ct">Závazek — odvod DPH</span><button class="dl-btn" onclick="downloadXml('z')">↓ Stáhnout XML</button></div>
+      <pre class="xml-pre" id="xmlZ">— nejdřív spusťte analýzu —</pre>
+    </div>
+    <div class="xml-card">
+      <div class="xml-ch"><span class="xml-ct">Interní doklad — zaúčtování</span><button class="dl-btn" onclick="downloadXml('i')">↓ Stáhnout XML</button></div>
+      <pre class="xml-pre" id="xmlI">— nejdřív spusťte analýzu —</pre>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<!-- MSAL + XLSX -->
+<script src="https://alcdn.msauth.net/browser/2.38.2/js/msal-browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ════════════════════════════════════════════════════════════════
+// KONFIGURACE & STATE
+// ════════════════════════════════════════════════════════════════
+const DRIVE_ID = 'b!40JzbtVKe0-O-UMoFXPzUjVOSWJcVsRPgu5Do4X00fOW3S31NcrnQJFbA7NPBVEE';
+const GRAPH    = 'https://graph.microsoft.com/v1.0';
+const SCOPES   = ['Files.Read.All','Sites.Read.All'];
+
+let msalApp  = null;
+let token    = null;
+let histFiles   = [];  // [{name, itemId, printDate, rows, webUrl}]
+let currentFile = null;
+let analysisResult = null;
+
+// ════════════════════════════════════════════════════════════════
+// CONFIG — localStorage
+// ════════════════════════════════════════════════════════════════
+const CFG_KEYS = ['cfgClientId','cfgTenantId','cfgAgKod','cfgFirma','cfgRok',
+                  'cfgFU','cfgBanAcc','cfgBanKod','cfgZavRada','cfgUser'];
+function cfg(id){ return (document.getElementById(id)?.value||'').trim(); }
+function saveConfig(){
+  const o={};CFG_KEYS.forEach(k=>o[k]=cfg(k));
+  try{localStorage.setItem('dph3_cfg',JSON.stringify(o));}catch(e){}
+}
+(function loadConfig(){
+  try{
+    const o=JSON.parse(localStorage.getItem('dph3_cfg')||'{}');
+    CFG_KEYS.forEach(k=>{const el=document.getElementById(k);if(el&&o[k])el.value=o[k];});
+  }catch(e){}
+  document.getElementById('redirectUriDisplay').textContent=location.origin+location.pathname;
+})();
+
+// ════════════════════════════════════════════════════════════════
+// STEPS
+// ════════════════════════════════════════════════════════════════
+function goStep(n){
+  [1,2,3,4,5].forEach(i=>{
+    document.getElementById('pane'+i).classList.toggle('hidden',i!==n);
+    const s=document.getElementById('step'+i);
+    s.classList.remove('active');
+  });
+  document.getElementById('step'+n).classList.add('active');
+}
+
+// ════════════════════════════════════════════════════════════════
+// MSAL AUTH — OAuth2 PKCE, token zůstane v browseru
+// ════════════════════════════════════════════════════════════════
+function getMsalApp(){
+  const clientId = cfg('cfgClientId');
+  const tenantId = cfg('cfgTenantId') || 'common';
+  if(!clientId){
+    logTo('loginLog','Client ID není vyplněno.','err');
+    return null;
+  }
+  if(msalApp) return msalApp;
+  msalApp = new msal.PublicClientApplication({
+    auth:{
+      clientId,
+      authority:`https://login.microsoftonline.com/${tenantId}`,
+      redirectUri: location.origin+location.pathname
+    },
+    cache:{ cacheLocation:'sessionStorage', storeAuthStateInCookie:false }
+  });
+  return msalApp;
+}
+
+async function msalLogin(){
+  const app = getMsalApp();
+  if(!app) return;
+  logTo('loginLog','Přihlašuji se...','info');
+  try{
+    // Zkusit tichý login
+    const accounts = app.getAllAccounts();
+    if(accounts.length>0){
+      const r = await app.acquireTokenSilent({scopes:SCOPES,account:accounts[0]});
+      token = r.accessToken;
+    } else {
+      const r = await app.loginPopup({scopes:SCOPES});
+      token = r.accessToken;
+    }
+    document.getElementById('authStatus').textContent='✓ '+app.getAllAccounts()[0]?.username;
+    document.getElementById('authStatus').className='auth-status ok';
+    logTo('loginLog','Přihlášení úspěšné.','ok');
+    document.getElementById('step2').classList.add('done');
+    goStep(2);
+  } catch(e){
+    logTo('loginLog','Chyba přihlášení: '+e.message,'err');
+  }
+}
+
+async function getToken(){
+  if(token) return token;
+  const app = getMsalApp();
+  if(!app) throw new Error('Nejste přihlášeni.');
+  const accounts = app.getAllAccounts();
+  if(!accounts.length) throw new Error('Nejste přihlášeni.');
+  const r = await app.acquireTokenSilent({scopes:SCOPES,account:accounts[0]});
+  token = r.accessToken;
+  return token;
+}
+
+// ════════════════════════════════════════════════════════════════
+// GRAPH API — přímé volání, bez prostředníka
+// ════════════════════════════════════════════════════════════════
+async function graphGet(url){
+  const t = await getToken();
+  const r = await fetch(GRAPH+url,{headers:{Authorization:'Bearer '+t}});
+  if(!r.ok){
+    const err = await r.json().catch(()=>({}));
+    throw new Error(err?.error?.message||`Graph ${r.status}`);
+  }
+  return r.json();
+}
+
+async function graphGetBinary(url){
+  const t = await getToken();
+  const r = await fetch(GRAPH+url,{headers:{Authorization:'Bearer '+t}});
+  if(!r.ok) throw new Error(`Graph ${r.status}`);
+  return r.arrayBuffer();
+}
+
+// Prohledat složku rekurzivně a najít XLSX soubory s "Podklady_DPH"
+async function findDphFiles(folderItemId, depth=0){
+  if(depth>4) return [];
+  const data = await graphGet(`/drives/${DRIVE_ID}/items/${folderItemId}/children?$select=id,name,webUrl,lastModifiedDateTime,folder,file&$top=100`);
+  let results=[];
+  for(const item of (data.value||[])){
+    if(item.folder){
+      const sub = await findDphFiles(item.id, depth+1);
+      results = results.concat(sub);
+    } else if(item.file && item.name.toLowerCase().includes('podklady_dph') && item.name.endsWith('.xlsx')){
+      results.push({
+        name:item.name, itemId:item.id, webUrl:item.webUrl,
+        lastModified:item.lastModifiedDateTime?.substring(0,10)||''
+      });
+    }
+  }
+  return results;
+}
+
+// Najít složku agenty v Účetní agendy
+async function findAgentFolder(){
+  const agKod = cfg('cfgAgKod').toUpperCase();
+  const firma = cfg('cfgFirma').toLowerCase();
+  // Prohledat děti složky "Účetní agendy"
+  // Cesta: root → tpCloud → Účetní agendy
+  // Použijeme search přes Graph
+  const data = await graphGet(`/drives/${DRIVE_ID}/root:/%C3%9A%C4%8Detn%C3%AD%20agend/:/children?$select=id,name&$top=200`);
+  let folder=null;
+  for(const item of (data.value||[])){
+    const n=item.name.toLowerCase();
+    if((agKod && n.startsWith(agKod.toLowerCase()+' -')) || (firma && n.includes(firma.toLowerCase()))){
+      folder=item; break;
+    }
+  }
+  return folder;
+}
+
+// Zkusit přímou cestu
+async function getItemByPath(path){
+  const encoded = path.split('/').map(p=>encodeURIComponent(p)).join('/');
+  try{
+    const data = await graphGet(`/drives/${DRIVE_ID}/root:/${encoded}`);
+    return data;
+  } catch(e){ return null; }
+}
+
+// ════════════════════════════════════════════════════════════════
+// NAČTENÍ HISTORIE ZE SP
+// ════════════════════════════════════════════════════════════════
+async function spLoadHistory(){
+  const agKod = cfg('cfgAgKod');
+  const firma = cfg('cfgFirma');
+  const rok   = cfg('cfgRok');
+  if(!agKod && !firma){ alert('Vyplňte kód agenty nebo název firmy.'); return; }
+
+  clearLog('histLog');
+  logTo('histLog',`Hledám složku agenty (${agKod||firma}) na SharePointu...`,'info');
+  histFiles=[];
+  renderHistList();
+
+  try{
+    // Cesta ke složce s DPH podklady
+    const basePath = `tpCloud/Účetní agendy`;
+
+    // Vyhledat pomocí Graph search (search endpoint)
+    const t = await getToken();
+    const searchResp = await fetch(`${GRAPH}/drives/${DRIVE_ID}/root/search(q='Podklady_DPH')?$select=id,name,webUrl,lastModifiedDateTime,parentReference&$top=200`,{
+      headers:{Authorization:'Bearer '+t}
+    });
+    const searchData = await searchResp.json();
+    const allFiles = (searchData.value||[]).filter(f=>
+      f.name?.toLowerCase().includes('podklady_dph') &&
+      f.name?.endsWith('.xlsx')
+    );
+
+    logTo('histLog',`Celkem ${allFiles.length} DPH souborů nalezeno v celém drive. Filtruji pro klienta...`,'info');
+
+    // Filtrovat jen soubory pro tuto agentu + rok
+    const pattern = (agKod||firma).toLowerCase();
+    const filtered = allFiles.filter(f=>{
+      const path = (f.parentReference?.path||'').toLowerCase();
+      const yearOk = path.includes('/'+rok+'/') || path.includes('/'+rok.substring(2)+'/');
+      const agOk   = path.includes(pattern) || path.includes(agKod?.toLowerCase()||'__');
+      return agOk && yearOk;
+    });
+
+    // Také soubory z předchozího roku (pro kontrolu duplicit)
+    const prevRok = String(parseInt(rok)-1);
+    const filteredPrev = allFiles.filter(f=>{
+      const path = (f.parentReference?.path||'').toLowerCase();
+      const yearOk = path.includes('/'+prevRok+'/') || path.includes('/'+prevRok.substring(2)+'/');
+      const agOk   = path.includes(pattern) || path.includes(agKod?.toLowerCase()||'__');
+      return agOk && yearOk;
+    });
+
+    const toLoad = [...filteredPrev, ...filtered];
+    logTo('histLog',`Filtrovano: ${toLoad.length} souborů (${rok} + ${prevRok}). Stahuji...`,'info');
+
+    for(const f of toLoad){
+      logTo('histLog',`↓ ${f.name}...`);
+      try{
+        const buf = await graphGetBinary(`/drives/${DRIVE_ID}/items/${f.id}/content`);
+        const wb  = XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+        const rows = parseXlsx(wb);
+        if(rows.length>0){
+          const pd = extractPrintDate(f.name, f.lastModifiedDateTime);
+          histFiles.push({name:f.name,itemId:f.id,webUrl:f.webUrl,printDate:pd,rows});
+          logTo('histLog',`  ✓ ${rows.length} dokladů`,'ok');
+        } else {
+          logTo('histLog',`  ⚠ prázdný`,'warn');
+        }
+      } catch(e){
+        logTo('histLog',`  ✗ ${e.message}`,'err');
+      }
+    }
+
+    histFiles.sort((a,b)=>a.printDate.localeCompare(b.printDate));
+    renderHistList();
+    logTo('histLog',`Hotovo — ${histFiles.length} historických souborů načteno.`,'ok');
+    document.getElementById('step3').classList.add('done');
+
+  } catch(e){
+    logTo('histLog','Chyba: '+e.message,'err');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// VYHLEDÁNÍ AKTUÁLNÍHO SOUBORU NA SP
+// ════════════════════════════════════════════════════════════════
+async function spSearchFile(){
+  const q = document.getElementById('spSearchQ').value.trim();
+  if(!q) return;
+  const el = document.getElementById('spSearchResults');
+  el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:4px"><span class="spin"></span>Hledám...</div>';
+  try{
+    const t = await getToken();
+    const r = await fetch(`${GRAPH}/drives/${DRIVE_ID}/root/search(q='${encodeURIComponent(q)}')?$select=id,name,webUrl,lastModifiedDateTime,parentReference&$top=10`,{
+      headers:{Authorization:'Bearer '+t}
+    });
+    const data = await r.json();
+    const files=(data.value||[]).filter(f=>f.name?.endsWith('.xlsx')&&f.name?.toLowerCase().includes('podklady_dph'));
+    el.innerHTML='';
+    if(!files.length){el.innerHTML='<div class="alert warn" style="margin-top:0">Nenalezeno.</div>';return;}
+    files.forEach(f=>{
+      const div=document.createElement('div');
+      div.className='fi';
+      div.innerHTML=`<span class="fi-badge" style="background:var(--accent-bg);color:var(--accent)">SP</span>
+        <span class="fi-name">${f.name}</span>
+        <span class="fi-meta">${f.lastModifiedDateTime?.substring(0,10)||''}</span>
+        <button class="btn primary" style="padding:3px 10px;font-size:11px" onclick="selectSpCurrent('${f.id}','${f.name}','${f.lastModifiedDateTime?.substring(0,10)||''}','${encodeURIComponent(f.webUrl||'')}')">Vybrat</button>`;
+      el.appendChild(div);
+    });
+  } catch(e){
+    el.innerHTML=`<div class="alert err">Chyba: ${e.message}</div>`;
+  }
+}
+
+async function selectSpCurrent(itemId, name, lastMod, webUrlEnc){
+  document.getElementById('spSearchResults').innerHTML='<div style="font-size:12px;padding:6px"><span class="spin"></span>Stahuju soubor ze SharePointu...</div>';
+  try{
+    const buf = await graphGetBinary(`/drives/${DRIVE_ID}/items/${itemId}/content`);
+    const wb  = XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+    const rows = parseXlsx(wb);
+    const pd = extractPrintDate(name, lastMod);
+    currentFile={name, itemId, printDate:pd, rows, webUrl:decodeURIComponent(webUrlEnc), local:false};
+    document.getElementById('spSearchResults').innerHTML='';
+    renderCurrentFile();
+  } catch(e){
+    document.getElementById('spSearchResults').innerHTML=`<div class="alert err">Chyba: ${e.message}</div>`;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// LOKÁLNÍ UPLOAD
+// ════════════════════════════════════════════════════════════════
+function doDragOver(e){e.preventDefault();document.getElementById('dz').classList.add('over');}
+function doDragLeave(){document.getElementById('dz').classList.remove('over');}
+function doDrop(e){e.preventDefault();document.getElementById('dz').classList.remove('over');if(e.dataTransfer.files[0])handleLocalFile(e.dataTransfer.files[0]);}
+
+async function handleLocalFile(file){
+  if(!file||!file.name.endsWith('.xlsx'))return;
+  const buf = await file.arrayBuffer();
+  const wb  = XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+  const rows = parseXlsx(wb);
+  const pd = extractPrintDate(file.name,'');
+  currentFile={name:file.name,itemId:null,printDate:pd,rows,webUrl:null,local:true};
+  document.getElementById('dz').classList.add('has-file');
+  renderCurrentFile();
+}
+
+// ════════════════════════════════════════════════════════════════
+// XLSX PARSER
+// ════════════════════════════════════════════════════════════════
+function parseXlsx(wb){
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  return parseRawRows(raw);
+}
+
+function parseRawRows(raw){
+  const rows=[];
+  let hIdx=-1;
+  for(let i=0;i<raw.length;i++){if(raw[i].some(c=>c==='Modul')){hIdx=i;break;}}
+  if(hIdx<0) return rows;
+  const hdr=raw[hIdx];
+  const x={};
+  hdr.forEach((c,i)=>{
+    if(c==='Modul')x.m=i; if(c==='Datum zdaň. plnění')x.dz=i;
+    if(c==='Uplatnit zdaň. plnění')x.uz=i; if(c==='Stát DPH')x.sd=i;
+    if(c==='Řádky DPH')x.rd=i; if(c==='Hodnota DPH')x.sz=i;
+    if(c==='Základ [Kč]')x.zk=i; if(c==='DPH [Kč]')x.dk=i;
+    if(c==='Datum zaúčtování')x.dza=i; if(c==='Datum vystavení dokladu')x.dv=i;
+    if(c==='Interní číslo dokladu')x.ic=i; if(c==='Firma')x.fi=i;
+    if(c==='DIČ'||c==='Číslo došlé')x.cd=i;
+  });
+  const MODS=new Set(['PHL','FAP','ODP','VPD','INT','FV','ZAL','BUP','PKP','DOB','POK','PPD']);
+  const pd=v=>{if(!v)return'';if(v instanceof Date)return v.toISOString().substring(0,10);if(typeof v==='string'&&v.match(/^\d{2}\.\d{2}\.\d{4}$/))return v.split('.').reverse().join('-');return String(v);};
+  const pn=v=>Math.round((parseFloat(String(v||'0').replace(',','.'))||0)*100)/100;
+  let lf='';
+  for(let i=hIdx+1;i<raw.length;i++){
+    const row=raw[i];
+    const mod=String(row[x.m]||'').trim();
+    if(!mod) continue;
+    if(!MODS.has(mod)){
+      if(mod&&!mod.startsWith('Řádky')&&!mod.startsWith('Stát')&&!mod.startsWith('S daní')&&!mod.startsWith('Přijatá')&&!mod.startsWith('Bez')&&!mod.startsWith('Daň'))lf=mod;
+      continue;
+    }
+    const ic=String(row[x.ic]||'').trim();
+    if(!ic) continue;
+    const fi=String(row[x.fi]||'').trim();
+    let cd='';
+    if(x.cd!==undefined){const rv=String(row[x.cd]||'').trim();cd=(rv.startsWith('CZ')||rv.startsWith('SK'))?'':rv;}
+    rows.push({modul:mod,intCislo:ic,datZd:pd(row[x.dz]),uplatZd:pd(row[x.uz]),statDph:String(row[x.sd]||'CZ').trim(),radkyDph:String(row[x.rd]||'').trim(),sazba:pn(row[x.sz]),zaklad:pn(row[x.zk]),dph:pn(row[x.dk]),datZauc:pd(row[x.dza]),datVyst:pd(row[x.dv]),firma:fi||lf,cisloDosle:cd});
+    lf='';
+  }
+  return rows;
+}
+
+function extractPrintDate(name, fallback){
+  const m=name.match(/(\d{4}-\d{2}-\d{2})/);
+  if(m)return m[1];
+  if(fallback&&fallback.length>=10)return fallback.substring(0,10);
+  return new Date().toISOString().substring(0,10);
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER
+// ════════════════════════════════════════════════════════════════
+function renderHistList(){
+  const el=document.getElementById('histList');
+  el.innerHTML='';
+  if(!histFiles.length){el.innerHTML='<div style="color:var(--muted);font-size:12px;padding:6px">Žádné historické soubory.</div>';return;}
+  histFiles.forEach((f,i)=>{
+    const div=document.createElement('div');
+    div.className='fi hist';
+    div.innerHTML=`<span class="fi-badge hist">Hist</span>
+      <a class="fi-name" href="${f.webUrl||'#'}" target="_blank" title="${f.name}">${f.name}</a>
+      <span class="fi-meta">${f.rows.length} dok · ${f.printDate}</span>
+      <span class="fi-rm" onclick="removeHist(${i})" title="Odebrat">×</span>`;
+    el.appendChild(div);
+  });
+  document.getElementById('histCount').textContent=histFiles.length+' souborů';
+}
+
+function renderCurrentFile(){
+  const el=document.getElementById('currentFileDisplay');
+  el.innerHTML='';
+  if(!currentFile)return;
+  const div=document.createElement('div');
+  div.className='fi current';
+  const link=currentFile.webUrl?`<a class="fi-name" href="${currentFile.webUrl}" target="_blank">${currentFile.name}</a>`:`<span class="fi-name">${currentFile.name}</span>`;
+  div.innerHTML=`<span class="fi-badge cur">Aktuální</span>
+    ${link}
+    <span class="fi-meta">${currentFile.rows.length} dok · ${currentFile.printDate}${currentFile.local?' · lokální':' · SP'}</span>
+    <span class="fi-rm" onclick="removeCurrent()">×</span>`;
+  el.appendChild(div);
+  document.getElementById('btnRunAnalysis').disabled=false;
+}
+
+function removeHist(i){histFiles.splice(i,1);renderHistList();}
+function removeCurrent(){currentFile=null;document.getElementById('currentFileDisplay').innerHTML='';document.getElementById('dz').classList.remove('has-file');document.getElementById('btnRunAnalysis').disabled=true;}
+
+// ════════════════════════════════════════════════════════════════
+// ANALÝZA DUPLICIT
+// ════════════════════════════════════════════════════════════════
+function runAnalysis(){
+  if(!currentFile)return;
+  const histIdx=new Map();
+  histFiles.forEach(p=>p.rows.forEach(r=>{if(!histIdx.has(r.intCislo))histIdx.set(r.intCislo,p.name);}));
+  const seen=new Map();
+  const enriched=currentFile.rows.map(r=>{
+    let status='ok',dupIn=null;
+    if(histIdx.has(r.intCislo)){status='dc';dupIn=histIdx.get(r.intCislo);}
+    const fk=r.intCislo+'|'+r.radkyDph+'|'+r.sazba;
+    if(seen.has(fk)){status='ds';dupIn='aktuální období';}
+    seen.set(fk,true);
+    return{...r,status,dupIn};
+  });
+  const total=enriched.length,ok=enriched.filter(x=>x.status==='ok').length;
+  const dc=enriched.filter(x=>x.status==='dc').length;
+  const ds=enriched.filter(x=>x.status==='ds').length;
+  const dphSum=computeDph(enriched.filter(x=>x.status==='ok'));
+  analysisResult={enriched,total,ok,dc,ds,dphSum};
+  renderAnalysis();
+  renderXml();
+}
+
+function computeDph(rows){
+  const g={};
+  rows.forEach(r=>{
+    const k=r.radkyDph||'?';
+    if(!g[k])g[k]={radky:k,sazby:{}};
+    if(!g[k].sazby[r.sazba])g[k].sazby[r.sazba]={z:0,d:0};
+    g[k].sazby[r.sazba].z+=r.zaklad;g[k].sazby[r.sazba].d+=r.dph;
+  });
+  let oz=0,od=0,pz=0,pd=0;
+  Object.values(g).forEach(gr=>{
+    const usc=gr.radky.match(/^0[12]/);
+    Object.values(gr.sazby).forEach(v=>{if(usc){oz+=v.z;od+=v.d;}else{pz+=v.z;pd+=v.d;}});
+  });
+  return{g,oz,od,pz,pd,odvod:Math.round((od-pd)*100)/100};
+}
+
+const fmt=n=>n.toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+function renderAnalysis(){
+  const r=analysisResult;
+  document.getElementById('statsBar').innerHTML=`
+    <div class="stat ${r.ok===r.total?'ok':''}"><div class="sv">${r.total}</div><div class="sl">Dokladů celkem</div></div>
+    <div class="stat ok"><div class="sv">${r.ok}</div><div class="sl">V pořádku</div></div>
+    <div class="stat ${r.dc>0?'err':'ok'}"><div class="sv">${r.dc}</div><div class="sl">Duplicity hist.</div></div>
+    <div class="stat ${r.ds>0?'warn':'ok'}"><div class="sv">${r.ds}</div><div class="sl">Duplicity v období</div></div>`;
+
+  const tbody=document.getElementById('tAllBody');
+  tbody.innerHTML='';
+  r.enriched.forEach(row=>{
+    const tr=document.createElement('tr');
+    tr.className=row.status==='dc'?'tr-dc':row.status==='ds'?'tr-ds':'';
+    tr.innerHTML=`<td><span class="badge ${row.status}">${row.status==='ok'?'✓ OK':row.status==='dc'?'⚠ HIST':'⚠ SAME'}</span></td>
+      <td class="mono">${row.modul}</td><td class="mono">${row.intCislo}</td>
+      <td class="mono">${row.datZd}</td><td class="mono">${row.radkyDph}</td>
+      <td class="mono right">${row.sazba}%</td>
+      <td class="mono right">${fmt(row.zaklad)}</td><td class="mono right">${fmt(row.dph)}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${row.firma||'—'}</td>
+      <td class="mono muted">${row.cisloDosle||'—'}</td>
+      <td class="muted" style="font-size:10px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${row.status!=='ok'?'<b>DUP: '+row.dupIn+'</b>':currentFile.name}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  const dups=r.enriched.filter(x=>x.status!=='ok');
+  document.getElementById('dupContent').innerHTML=dups.length===0
+    ?'<div class="alert ok">✓ Žádné duplicity nalezeny.</div>'
+    :`<div class="alert err">Nalezeno ${dups.length} duplicit.</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Typ</th><th>Modul</th><th>Interní č.</th><th>Datum ZD</th><th>Sazba</th><th class="right">Základ</th><th class="right">DPH</th><th>Firma</th><th>Duplicita v</th></tr></thead><tbody>
+      ${dups.map(row=>`<tr class="tr-${row.status}"><td><span class="badge ${row.status}">${row.status==='dc'?'Hist.':'Stejné'}</span></td>
+        <td class="mono">${row.modul}</td><td class="mono">${row.intCislo}</td><td class="mono">${row.datZd}</td>
+        <td class="mono">${row.sazba}%</td><td class="mono right">${fmt(row.zaklad)}</td><td class="mono right">${fmt(row.dph)}</td>
+        <td>${row.firma||'—'}</td><td><b>${row.dupIn}</b></td></tr>`).join('')}
+      </tbody></table></div>`;
+
+  const s=r.dphSum;
+  document.getElementById('dphContent').innerHTML=`<div class="dph-grid">
+    <div class="dph-blk"><div class="dph-blk-h">Uskutečněná plnění (01–02)</div><table>
+    ${Object.values(s.g).filter(g=>g.radky.match(/^0[12]/)).map(g=>Object.entries(g.sazby).map(([sz,v])=>`<tr><td>${g.radky} – ${sz}%</td><td>${fmt(v.z)}</td><td>${fmt(v.d)}</td></tr>`).join('')).join('')}
+    <tr class="tot"><td><b>Celkem</b></td><td>${fmt(s.oz)}</td><td>${fmt(s.od)}</td></tr></table></div>
+    <div class="dph-blk"><div class="dph-blk-h">Přijatá plnění (40–41, 05–06)</div><table>
+    ${Object.values(s.g).filter(g=>!g.radky.match(/^0[12]/)).map(g=>Object.entries(g.sazby).map(([sz,v])=>`<tr><td>${g.radky} – ${sz}%</td><td>${fmt(v.z)}</td><td>${fmt(v.d)}</td></tr>`).join('')).join('')}
+    <tr class="tot"><td><b>Celkem</b></td><td>${fmt(s.pz)}</td><td>${fmt(s.pd)}</td></tr></table></div></div>
+    <div class="stat ${s.odvod>0?'err':'ok'}" style="max-width:270px;margin-top:6px">
+      <div class="sv">${fmt(Math.abs(s.odvod))} Kč</div>
+      <div class="sl">${s.odvod>0?'Vlastní daňová povinnost':'Nadměrný odpočet'}</div></div>`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// XML GENEROVÁNÍ — pouze součty, žádná citlivá data
+// ════════════════════════════════════════════════════════════════
+function renderXml(){
+  const r=analysisResult;
+  document.getElementById('xmlWarnDiv').classList.toggle('hidden',r.dc===0&&r.ds===0);
+  const dates=currentFile.rows.map(x=>x.datZd).filter(Boolean).sort();
+  const lastDate=dates[dates.length-1]||new Date().toISOString().substring(0,10);
+  const perioda=lastDate.substring(0,7).replace('-','');
+  const v=Math.abs(r.dphSum.odvod);
+  document.getElementById('xmlZ').textContent=genZav(lastDate,v,perioda);
+  document.getElementById('xmlI').textContent=genInt(lastDate,v,perioda);
+}
+
+function genZav(d,v,p){return`<?xml version="1.0" encoding="utf-8"?>
+<winstrom version="1.0" source="FlexiBee">
+  <zavazek>
+    <kod>ZAV26XXXX</kod>
+    <datVyst>${d}</datVyst>
+    <duzpPuv>${d}</duzpPuv>
+    <duzpUcto>${d}</duzpUcto>
+    <datSazbyDph>${d}</datSazbyDph>
+    <popis>odvod DPH ${p}</popis>
+    <varSym>${p}</varSym>
+    <sumOsv>${v.toFixed(1)}</sumOsv>
+    <sumZklSniz>0.0</sumZklSniz><sumZklSniz2>0.0</sumZklSniz2>
+    <sumZklZakl>0.0</sumZklZakl>
+    <sumZklCelkem>${v.toFixed(1)}</sumZklCelkem>
+    <sumDphSniz>0.0</sumDphSniz><sumDphSniz2>0.0</sumDphSniz2>
+    <sumDphZakl>0.0</sumDphZakl><sumDphCelkem>0.0</sumDphCelkem>
+    <sumCelkSniz>0.0</sumCelkSniz><sumCelkSniz2>0.0</sumCelkSniz2>
+    <sumCelkZakl>0.0</sumCelkZakl>
+    <sumCelkem>${v.toFixed(1)}</sumCelkem>
+    <kurz>0.0</kurz><kurzMnozstvi>0.0</kurzMnozstvi>
+    <nazFirmy>${cfg('cfgFU')}</nazFirmy>
+    <buc>${cfg('cfgBanAcc')}</buc>
+    <bezPolozek>false</bezPolozek><ucetni>true</ucetni>
+    <szbDphSniz>12.0</szbDphSniz><szbDphSniz2>0.0</szbDphSniz2><szbDphZakl>21.0</szbDphZakl>
+    <zuctovano>true</zuctovano><datUcto>${d}</datUcto><storno>false</storno>
+    <typDokl evidencePath="typ-zavazku">code:OST. ZÁVAZKY</typDokl>
+    <mena evidencePath="mena">code:CZK</mena>
+    <primUcet evidencePath="ucet">code:379001</primUcet>
+    <protiUcet evidencePath="ucet">code:343999</protiUcet>
+    <statDph evidencePath="stat-dph">code:CZ</statDph>
+    <clenDph evidencePath="cleneni-dph">code:000P</clenDph>
+    <stredisko evidencePath="stredisko">code:C</stredisko>
+    <uzivatel evidencePath="uzivatel">code:${cfg('cfgUser')}</uzivatel>
+    <zodpOsoba evidencePath="uzivatel">code:richnavsky</zodpOsoba>
+    <rada evidencePath="rada-zavazku" if-not-found="null">code:${cfg('cfgZavRada')}</rada>
+    <sazbaDphOsv evidencePath="sazba-dph">key:CZ_0_1993</sazbaDphOsv>
+    <sazbaDphSniz evidencePath="sazba-dph">key:CZ_1200_2024</sazbaDphSniz>
+    <sazbaDphZakl evidencePath="sazba-dph">key:CZ_21_2013</sazbaDphZakl>
+    <smerKod evidencePath="penezni-ustav">code:${cfg('cfgBanKod')}</smerKod>
+    <clenKonVykDph evidencePath="cleneni-kontrolni-hlaseni">code:0.0.</clenKonVykDph>
+    <formaUhradyCis evidencePath="forma-uhrady">code:PREVOD</formaUhradyCis>
+  </zavazek>
+</winstrom>`;}
+
+function genInt(d,v,p){return`<?xml version="1.0" encoding="utf-8"?>
+<winstrom version="1.0" source="FlexiBee">
+  <interni-doklad>
+    <kod>IN00XX/2026</kod>
+    <cisDosle>${p.padStart(8,'0')}</cisDosle>
+    <varSym>${p.padStart(8,'0')}</varSym>
+    <datVyst>${d}</datVyst>
+    <duzpPuv>${d}</duzpPuv>
+    <datSazbyDph>${d}</datSazbyDph>
+    <popis>Zaúčtování DPH ${p}</popis>
+    <sumOsv>${v.toFixed(1)}</sumOsv>
+    <sumZklSniz>0.0</sumZklSniz><sumZklSniz2>0.0</sumZklSniz2>
+    <sumZklZakl>0.0</sumZklZakl>
+    <sumZklCelkem>${v.toFixed(1)}</sumZklCelkem>
+    <sumDphSniz>0.0</sumDphSniz><sumDphSniz2>0.0</sumDphSniz2>
+    <sumDphZakl>0.0</sumDphZakl><sumDphCelkem>0.0</sumDphCelkem>
+    <sumCelkSniz>0.0</sumCelkSniz><sumCelkSniz2>0.0</sumCelkSniz2>
+    <sumCelkZakl>0.0</sumCelkZakl>
+    <sumCelkem>${v.toFixed(1)}</sumCelkem>
+    <kurz>0.0</kurz><kurzMnozstvi>0.0</kurzMnozstvi>
+    <bezPolozek>false</bezPolozek><ucetni>true</ucetni>
+    <szbDphSniz>12.0</szbDphSniz><szbDphSniz2>0.0</szbDphSniz2><szbDphZakl>21.0</szbDphZakl>
+    <zuctovano>true</zuctovano><datUcto>${d}</datUcto><storno>false</storno>
+    <typDokl evidencePath="typ-interniho-dokladu">code:INT. DOKLAD</typDokl>
+    <mena evidencePath="mena">code:CZK</mena>
+    <statDph evidencePath="stat-dph">code:CZ</statDph>
+    <clenDph evidencePath="cleneni-dph">code:000P</clenDph>
+    <stredisko evidencePath="stredisko">code:C</stredisko>
+    <uzivatel evidencePath="uzivatel">code:${cfg('cfgUser')}</uzivatel>
+    <zodpOsoba evidencePath="uzivatel">code:richnavsky</zodpOsoba>
+    <rada evidencePath="rada-interniho-dokladu" if-not-found="null">code:INTERNÍ DOKLADY</rada>
+    <sazbaDphOsv evidencePath="sazba-dph">key:CZ_0_1993</sazbaDphOsv>
+    <sazbaDphSniz evidencePath="sazba-dph">key:CZ_1200_2024</sazbaDphSniz>
+    <sazbaDphZakl evidencePath="sazba-dph">key:CZ_21_2013</sazbaDphZakl>
+    <clenKonVykDph evidencePath="cleneni-kontrolni-hlaseni">code:0.0.</clenKonVykDph>
+  </interni-doklad>
+</winstrom>`;}
+
+// ════════════════════════════════════════════════════════════════
+// UTILITIES
+// ════════════════════════════════════════════════════════════════
+function downloadXml(type){
+  const el=document.getElementById(type==='z'?'xmlZ':'xmlI');
+  const p=currentFile?.printDate?.substring(0,7).replace('-','')||'';
+  const fn=type==='z'?`zavazek_DPH_${p}.xml`:`interni_DPH_${p}.xml`;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([el.textContent],{type:'text/xml;charset=utf-8'}));
+  a.download=fn;a.click();
+}
+
+function exportCsv(){
+  if(!analysisResult)return;
+  const rows=[['Stav','Modul','Interní č.','Datum ZD','Řádky DPH','Sazba','Základ Kč','DPH Kč','Firma','Číslo došlé','Duplicita']];
+  analysisResult.enriched.forEach(r=>rows.push([r.status,r.modul,r.intCislo,r.datZd,r.radkyDph,r.sazba,r.zaklad,r.dph,r.firma,r.cisloDosle,r.dupIn||'']));
+  const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
+  a.download='dph_kontrola.csv';a.click();
+}
+
+function showTab(id){
+  ['tAll','tDup','tDph'].forEach(t=>document.getElementById(t).classList.toggle('hidden',t!==id));
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',['tAll','tDup','tDph'][i]===id));
+}
+
+function showAzureHelp(){
+  document.getElementById('azureHelp').classList.toggle('hidden');
+}
+
+function logTo(elId,msg,type='info'){
+  const el=document.getElementById(elId);
+  el.classList.remove('hidden');
+  const d=document.createElement('div');
+  d.className=type;d.textContent='> '+msg;
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+function clearLog(elId){
+  const el=document.getElementById(elId);
+  el.innerHTML='';el.classList.remove('hidden');
+}
+
+function clearAll(){
+  if(!confirm('Smazat vše?'))return;
+  histFiles=[];currentFile=null;analysisResult=null;
+  renderHistList();renderCurrentFile();
+  document.getElementById('tAllBody').innerHTML='';
+  document.getElementById('fileInput').value='';
+  document.getElementById('dz').classList.remove('has-file');
+  document.getElementById('btnRunAnalysis').disabled=true;
+}
+</script>
+</body>
+</html>
