@@ -743,15 +743,19 @@ async function spLoadHistory(){
 
     logTo('histLog',`Nalezeno ${allFiles.length} Podklady_DPH souborů v agendě. Filtruji podle roku...`,'info');
 
-    // Filtrovat podle roku z webUrl nebo parentReference.path
+    // Debug — zobraz první 3 URL pro diagnostiku
+    allFiles.slice(0,3).forEach(f=>logTo('histLog',`  URL vzor: ...${decodeURIComponent(f.webUrl||'').split('/').slice(-4).join('/')}`))
+
+    // Filtrovat podle roku — rok může být součástí názvu složky (042026, 2026, 26)
     const filtered = allFiles.filter(f=>{
       const path = decodeURIComponent((f.webUrl||f.parentReference?.path||'').toLowerCase());
-      return path.includes('/'+rok+'/') || path.includes('/'+rok.substring(2)+'/');
+      // Hledat rok jako: /2026/, 042026, 2026xx, nebo jen 2026 kdekoliv
+      return path.includes(rok) || path.includes(rok.substring(2));
     });
 
     const filteredPrev = allFiles.filter(f=>{
       const path = decodeURIComponent((f.webUrl||f.parentReference?.path||'').toLowerCase());
-      return path.includes('/'+prevRok+'/') || path.includes('/'+prevRok.substring(2)+'/');
+      return path.includes(prevRok) || path.includes(prevRok.substring(2));
     });
 
     const toLoad = [...filteredPrev, ...filtered];
