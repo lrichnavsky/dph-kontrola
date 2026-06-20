@@ -424,7 +424,7 @@ tr.tr-ds td{background:#fffbf0}
 // ════════════════════════════════════════════════════════════════
 // PIN OCHRANA — změň hash níže pokud chceš jiný PIN
 // ════════════════════════════════════════════════════════════════
-const PIN_HASH = '0fcfb0d3bee2a790484b7e48314198b48ec0b6ba5b4646533f2c2b488cb77f78'; // sem vlož hash svého PINu
+const PIN_HASH = '01EUZRQBF5GWKFYUPVJ5FJNA37PXWLMNHW'; // sem vlož hash svého PINu
 
 async function hashPin(pin){
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
@@ -711,9 +711,8 @@ async function getItemByPath(path){
 async function spLoadHistory(){
   if(!selectedAgenda){ alert('Nejdřív vyberte agendu klienta.'); return; }
 
-  const agKod = selectedAgenda.kod;
-  const firma = selectedAgenda.firma;
   const rok   = cfg('cfgRok');
+  const prevRok = String(parseInt(rok)-1);
 
   clearLog('histLog');
   logTo('histLog',`Hledám DPH soubory: ${selectedAgenda.name} / ${rok}...`,'info');
@@ -721,44 +720,46 @@ async function spLoadHistory(){
   renderHistList();
 
   try{
-    // Cesta ke složce s DPH podklady
-    const basePath = `tpCloud/Účetní agendy`;
-
-    // Vyhledat pomocí Graph search (search endpoint)
     const t = await getToken();
-    const searchResp = await fetch(`${GRAPH}/drives/${DRIVE_ID}/root/search(q='Podklady_DPH')?$select=id,name,webUrl,lastModifiedDateTime,parentReference&$top=200`,{
-      headers:{Authorization:'Bearer '+t}
-    });
+
+    // Přímé hledání XLSX souborů pojmenovaných "Podklady_DPH*" uvnitř složky agenty
+    // Použijeme search endpoint na konkrétní složku agenty (ne celý drive)
+    logTo('histLog',`Prohledávám složku agenty přímo na SP...`,'info');
+
+    // Nejdřív najít item ID složky agenty
+    const agendaPath = `tpCloud/Účetní agendy/${selectedAgenda.name}`;
+    const agendaFolder = await graphGet(`/drives/${DRIVE_ID}/root:/${encodeURIComponentPath(agendaPath)}?$select=id,name,webUrl`);
+    logTo('histLog',`Složka nalezena: ${agendaFolder.name} (ID: ${agendaFolder.id})`, 'ok');
+
+    // Hledat Podklady_DPH*.xlsx uvnitř složky agenty — rekurzivně
+    const searchUrl = `/drives/${DRIVE_ID}/items/${agendaFolder.id}/search(q='Podklady_DPH')?$select=id,name,webUrl,lastModifiedDateTime,parentReference&$top=200`;
+    const searchResp = await fetch(`${GRAPH}${searchUrl}`, { headers:{Authorization:'Bearer '+t} });
     const searchData = await searchResp.json();
+
     const allFiles = (searchData.value||[]).filter(f=>
       f.name?.toLowerCase().includes('podklady_dph') &&
       f.name?.endsWith('.xlsx')
     );
 
-    logTo('histLog',`Celkem ${allFiles.length} DPH souborů nalezeno v celém drive. Filtruji pro klienta...`,'info');
+    logTo('histLog',`Nalezeno ${allFiles.length} Podklady_DPH souborů v agendě. Filtruji podle roku...`,'info');
 
-    // Filtrovat podle přesného názvu složky agenty (webUrl obsahuje název složky)
-    const agendaNameL = selectedAgenda.name.toLowerCase();
-    const agKodL = agKod.toLowerCase();
-    const firmaL = firma.toLowerCase();
-
+    // Filtrovat podle roku z webUrl nebo parentReference.path
     const filtered = allFiles.filter(f=>{
-      const url = decodeURIComponent((f.webUrl||'').toLowerCase());
-      const yearOk = url.includes('/'+rok+'/') || url.includes('/'+rok.substring(2)+'/');
-      const agOk   = url.includes(agendaNameL) || url.includes(agKodL+' -') || url.includes(firmaL);
-      return agOk && yearOk;
+      const path = decodeURIComponent((f.webUrl||f.parentReference?.path||'').toLowerCase());
+      return path.includes('/'+rok+'/') || path.includes('/'+rok.substring(2)+'/');
     });
 
-    const prevRok = String(parseInt(rok)-1);
     const filteredPrev = allFiles.filter(f=>{
-      const url = decodeURIComponent((f.webUrl||'').toLowerCase());
-      const yearOk = url.includes('/'+prevRok+'/') || url.includes('/'+prevRok.substring(2)+'/');
-      const agOk   = url.includes(agendaNameL) || url.includes(agKodL+' -') || url.includes(firmaL);
-      return agOk && yearOk;
+      const path = decodeURIComponent((f.webUrl||f.parentReference?.path||'').toLowerCase());
+      return path.includes('/'+prevRok+'/') || path.includes('/'+prevRok.substring(2)+'/');
     });
 
     const toLoad = [...filteredPrev, ...filtered];
-    logTo('histLog',`Filtrovano: ${filtered.length} souborů rok ${rok} + ${filteredPrev.length} souborů rok ${prevRok} = celkem ${toLoad.length}. Stahuji...`,'info');
+    logTo('histLog',`Filtrovano: ${filtered.length} souborů rok ${rok} + ${filteredPrev.length} rok ${prevRok} = celkem ${toLoad.length}. Stahuji...`,'info');
+
+    if(toLoad.length === 0){
+      logTo('histLog',`Žádné soubory nenalezeny — zkuste obnovit nebo nahrajte ručně.`,'warn');
+    }
 
     for(const f of toLoad){
       logTo('histLog',`↓ ${f.name}...`);
@@ -771,7 +772,7 @@ async function spLoadHistory(){
           histFiles.push({name:f.name,itemId:f.id,webUrl:f.webUrl,printDate:pd,rows});
           logTo('histLog',`  ✓ ${rows.length} dokladů`,'ok');
         } else {
-          logTo('histLog',`  ⚠ prázdný`,'warn');
+          logTo('histLog',`  ⚠ prázdný nebo neparsovatelný`,'warn');
         }
       } catch(e){
         logTo('histLog',`  ✗ ${e.message}`,'err');
