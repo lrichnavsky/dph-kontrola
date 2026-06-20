@@ -2588,19 +2588,21 @@ async function buildPdfFromImages(imgDataList){
 <style>
 .gpc-wrap { min-height: calc(100vh - 56px); background: #F5F4F0; font-family: 'DM Sans','Segoe UI',sans-serif; }
 .gpc-topbar { background: #1C2B4A; padding: 0 32px; height: 44px; display: flex; align-items: center; gap: 10px; }
+.gpc-topbar-inner { max-width: 760px; margin: 0 auto; width: 100%; display: flex; align-items: center; gap: 10px; }
 .gpc-topbar-logo { font-weight: 800; font-size: 13px; color: #fff; }
 .gpc-topbar-sep { color: rgba(255,255,255,.3); font-size: 16px; }
 .gpc-topbar-tool { font-size: 12px; color: rgba(255,255,255,.65); }
 .gpc-topbar-badge { margin-left: auto; font-size: 11px; font-weight: 600; color: rgba(255,255,255,.7); display: flex; align-items: center; gap: 6px; }
 .gpc-topbar-dot { width: 7px; height: 7px; border-radius: 50%; background: #C8A84B; }
 .gpc-hero { background: #1C2B4A; color: #fff; padding: 28px 32px 24px; }
+.gpc-hero-inner { max-width: 760px; margin: 0 auto; }
 .gpc-hero-title { font-size: 28px; font-weight: 800; letter-spacing: -.03em; margin-bottom: 8px; }
 .gpc-hero-title span { color: #C8A84B; }
 .gpc-hero-sub { font-size: 13px; color: rgba(255,255,255,.65); line-height: 1.6; max-width: 520px; margin-bottom: 16px; }
 .gpc-hero-sub strong { color: #C8A84B; }
 .gpc-bank-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .gpc-bank-chip { font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 100px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); color: rgba(255,255,255,.85); letter-spacing: .02em; }
-.gpc-main { padding: 28px 32px; max-width: 860px; }
+.gpc-main { padding: 28px 32px; max-width: 760px; margin: 0 auto; }
 .gpc-section-label { font-size: 11px; font-weight: 700; color: #4B5563; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
 /* Bank selector */
 .gpc-bank-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0; }
@@ -2625,7 +2627,7 @@ async function buildPdfFromImages(imgDataList){
 .gpc-drop { border: 2px dashed #C8C4BC; border-radius: 10px; padding: 36px 24px; text-align: center; cursor: pointer; background: #fff; transition: all .18s; margin-bottom: 14px; position: relative; }
 .gpc-drop:hover, .gpc-drop.over { border-color: #C8A84B; background: #FEFAEE; }
 .gpc-drop.has-file { border-color: #15803D; background: #F0FDF4; }
-.gpc-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.gpc-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 10; width: 100%; height: 100%; }
 .gpc-drop-icon { width: 44px; height: 44px; background: #EEF2FF; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 20px; }
 .gpc-drop-main { font-size: 14px; font-weight: 600; color: #1A1A1A; margin-bottom: 4px; }
 .gpc-drop-sub { font-size: 12px; color: #9CA3AF; }
@@ -2671,7 +2673,8 @@ async function buildPdfFromImages(imgDataList){
 .gpc-security-text { font-size: 12px; color: #166534; line-height: 1.5; }
 .gpc-security-title { font-weight: 700; margin-bottom: 2px; }
 /* Footer */
-.gpc-footer { padding: 20px 32px; border-top: 1px solid #E2DFD8; font-size: 11px; color: #9CA3AF; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #fff; }
+.gpc-footer { padding: 20px 32px; border-top: 1px solid #E2DFD8; font-size: 11px; color: #9CA3AF; background: #fff; }
+.gpc-footer-inner { max-width: 760px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .gpc-spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px; }
 .gpc-back { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); color: rgba(255,255,255,.8); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; margin-bottom: 0; transition: background .15s; }
 .gpc-back:hover { background: rgba(255,255,255,.18); }
@@ -2681,14 +2684,17 @@ async function buildPdfFromImages(imgDataList){
 <div class="gpc-wrap">
   <!-- Topbar -->
   <div class="gpc-topbar">
+  <div class="gpc-topbar-inner">
     <span class="gpc-topbar-logo">tvojepodnikani.cz</span>
     <span class="gpc-topbar-sep">›</span>
     <span class="gpc-topbar-tool">GPC Agent</span>
     <button class="gpc-back" onclick="goHome()" style="margin-left:auto">← Zpět</button>
   </div>
+  </div>
 
   <!-- Hero -->
   <div class="gpc-hero">
+  <div class="gpc-hero-inner">
     <div class="gpc-hero-title">Bankovní výpis → <span>GPC</span></div>
     <p class="gpc-hero-sub">
       Nahrajte výpis z ČSOB, KB, České spořitelny, Raiffeisenbank nebo Moneta.
@@ -2701,7 +2707,7 @@ async function buildPdfFromImages(imgDataList){
       <span class="gpc-bank-chip">RB</span>
       <span class="gpc-bank-chip">Moneta</span>
     </div>
-  </div>
+  </div></div>
 
   <!-- Main -->
   <div class="gpc-main">
@@ -2816,8 +2822,10 @@ async function buildPdfFromImages(imgDataList){
   </div><!-- /gpc-main -->
 
   <div class="gpc-footer">
+  <div class="gpc-footer-inner">
     <span>GPC Agent v3 · ABO/GPC specifikace ČNB · Claude Sonnet · ČSOB · KB · ČS · RB · Moneta</span>
     <span>kódování Windows-1250 · Pohoda · Money S3</span>
+  </div>
   </div>
 
 </div><!-- /gpc-wrap -->
