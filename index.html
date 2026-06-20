@@ -424,7 +424,7 @@ tr.tr-ds td{background:#fffbf0}
 // ════════════════════════════════════════════════════════════════
 // PIN OCHRANA — změň hash níže pokud chceš jiný PIN
 // ════════════════════════════════════════════════════════════════
-const PIN_HASH = 'e6f3ac96f75a1d1f0a9aec0493301c78b9c8dbdcd4740f6413c5de09d7edc928'; // sem vlož hash svého PINu
+const PIN_HASH = '0fcfb0d3bee2a790484b7e48314198b48ec0b6ba5b4646533f2c2b488cb77f78'; // sem vlož hash svého PINu
 
 async function hashPin(pin){
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
