@@ -169,6 +169,7 @@ tr.tr-ds td{background:#fffbf0}
   <div class="step" id="step3" onclick="goStep(3)"><span class="pill">3</span>Soubory</div>
   <div class="step" id="step4" onclick="goStep(4)"><span class="pill">4</span>Analýza</div>
   <div class="step" id="step5" onclick="goStep(5)"><span class="pill">5</span>XML výstup</div>
+  <div class="step" id="step6" onclick="goStep(6)"><span class="pill">6</span>Kontrola úplnosti DPH</div>
 </div>
 
 <!-- ═══ PANE 1 — PŘIHLÁŠENÍ ═══ -->
@@ -214,21 +215,38 @@ tr.tr-ds td{background:#fffbf0}
   </div>
 </div>
 
-<!-- ═══ PANE 2 — KONFIGURACE KLIENTA ═══ -->
+<!-- ═══ PANE 2 — VÝBĚR KLIENTA ═══ -->
 <div id="pane2" class="hidden">
+
   <div class="card">
-    <div class="card-head"><span class="card-title">Konfigurace klienta</span></div>
+    <div class="card-head">
+      <span class="card-title">Výběr klienta</span>
+      <button class="btn" style="color:var(--text);border-color:var(--border);font-size:11px" onclick="loadAgendaList()">↻ Obnovit seznam</button>
+    </div>
     <div class="card-body">
-      <div class="grid3" style="margin-bottom:14px">
-        <div class="field">
-          <label>Kód agenty (pro SP cestu)</label>
-          <input id="cfgAgKod" placeholder="KMA" oninput="saveConfig()">
-          <span style="font-size:10px;color:var(--muted);margin-top:2px">Část cesty: .../Účetní agendy/<b>KMA</b> - .../</span>
-        </div>
-        <div class="field">
-          <label>Název firmy (část názvu složky)</label>
-          <input id="cfgFirma" placeholder="KM AVION" oninput="saveConfig()">
-        </div>
+      <!-- Vyhledávací pole -->
+      <div style="margin-bottom:12px">
+        <input id="agendaSearch" placeholder="🔍 Hledat agendu... (např. KM AVION, FOODSET, TPK)" 
+          style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:14px;outline:none"
+          oninput="filterAgendas(this.value)" onkeydown="if(event.key==='Enter')filterAgendas(this.value)">
+      </div>
+      <!-- Seznam agend -->
+      <div id="agendaListWrap">
+        <div style="color:var(--muted);font-size:12px;padding:8px">Načítám seznam agend ze SharePointu...</div>
+      </div>
+      <!-- Vybraná agenda -->
+      <div id="selectedAgendaBox" class="hidden" style="margin-top:14px;padding:12px;background:var(--ok-bg);border:1.5px solid var(--ok);border-radius:var(--r)">
+        <div style="font-size:11px;color:var(--ok);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Vybraná agenda</div>
+        <div id="selectedAgendaName" style="font-weight:700;font-size:15px"></div>
+        <div id="selectedAgendaPath" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span class="card-title">Nastavení DPH & AbraFlexi</span></div>
+    <div class="card-body">
+      <div class="grid3">
         <div class="field">
           <label>Rok DPH</label>
           <select id="cfgRok" oninput="saveConfig()">
@@ -256,8 +274,11 @@ tr.tr-ds td{background:#fffbf0}
           <input id="cfgUser" value="office-tpcloud" oninput="saveConfig()">
         </div>
       </div>
-      <button class="btn primary" onclick="goStep(3);spLoadHistory()">Pokračovat a načíst historii →</button>
     </div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end">
+    <button class="btn primary" id="btnToFiles" onclick="goStep(3);spLoadHistory()" disabled>Načíst historii →</button>
   </div>
 </div>
 
@@ -336,14 +357,60 @@ tr.tr-ds td{background:#fffbf0}
 <!-- ═══ PANE 5 — XML ═══ -->
 <div id="pane5" class="hidden">
   <div id="xmlWarnDiv" class="alert err hidden">⚠ Aktuální DPH obsahuje duplicitní doklady — zkontrolujte před importem!</div>
+  <div id="xmlTypeBadge" style="margin-bottom:12px;display:flex;align-items:center;gap:10px">
+    <span id="xmlTypeLabel" style="font-size:13px;font-weight:700"></span>
+    <span id="xmlTypeNote" style="font-size:12px;color:var(--muted)"></span>
+  </div>
   <div class="xml-grid">
     <div class="xml-card">
-      <div class="xml-ch"><span class="xml-ct">Závazek — odvod DPH</span><button class="dl-btn" onclick="downloadXml('z')">↓ Stáhnout XML</button></div>
+      <div class="xml-ch">
+        <span class="xml-ct" id="xmlCard1Title">Závazek / Pohledávka</span>
+        <button class="dl-btn" onclick="downloadXml('z')">↓ Stáhnout XML</button>
+      </div>
       <pre class="xml-pre" id="xmlZ">— nejdřív spusťte analýzu —</pre>
     </div>
     <div class="xml-card">
-      <div class="xml-ch"><span class="xml-ct">Interní doklad — zaúčtování</span><button class="dl-btn" onclick="downloadXml('i')">↓ Stáhnout XML</button></div>
+      <div class="xml-ch">
+        <span class="xml-ct">Interní doklad — zaúčtování DPH</span>
+        <button class="dl-btn" onclick="downloadXml('i')">↓ Stáhnout XML</button>
+      </div>
       <pre class="xml-pre" id="xmlI">— nejdřív spusťte analýzu —</pre>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PANE 6 — COMPLETENESS CHECK ═══ -->
+<div id="pane6" class="hidden">
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Kontrola úplnosti DPH — všechny agendy</span>
+      <span class="muted" style="font-size:11px">ověří zda každá aktivní agenda má složku pro dané DPH období</span>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+        <div class="field" style="flex:0 0 120px">
+          <label>DPH za měsíc</label>
+          <select id="ccMonth">
+            <option value="01">Leden</option><option value="02">Únor</option>
+            <option value="03">Březen</option><option value="04">Duben</option>
+            <option value="05">Květen</option><option value="06">Červen</option>
+            <option value="07">Červenec</option><option value="08">Srpen</option>
+            <option value="09">Září</option><option value="10">Říjen</option>
+            <option value="11">Listopad</option><option value="12">Prosinec</option>
+          </select>
+        </div>
+        <div class="field" style="flex:0 0 90px">
+          <label>Rok</label>
+          <select id="ccYear">
+            <option>2026</option><option>2025</option><option>2024</option>
+          </select>
+        </div>
+        <div>
+          <button class="btn primary" onclick="runCompletenessCheck()">🔍 Spustit kontrolu</button>
+        </div>
+      </div>
+      <div id="ccLog" class="log hidden"></div>
+      <div id="ccResults" style="margin-top:14px"></div>
     </div>
   </div>
 </div>
@@ -387,6 +454,83 @@ async function checkPin(){
 })();
 
 // ════════════════════════════════════════════════════════════════
+// AGENDA SELECTOR — načte seznam složek ze SharePointu
+// ════════════════════════════════════════════════════════════════
+// Item ID složky "Účetní agendy" na tpCloud SharePointu
+const AGENDY_ITEM_ID = '01EUZRQBF5GWKFYUPVJ5FJNA37PXWLMNHW';
+let allAgendas = [];      // [{name, itemId, kod, firma}]
+let selectedAgenda = null; // {name, itemId, kod, firma}
+
+async function loadAgendaList(){
+  const wrap = document.getElementById('agendaListWrap');
+  wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px"><span class="spin"></span>Načítám agendy ze SharePointu...</div>';
+  try{
+    // Načíst obsah složky Účetní agendy — přes Graph přímo
+    // Cesta: /drives/{driveId}/root:/tpCloud/Účetní agendy:/children
+    const data = await graphGet(`/drives/${DRIVE_ID}/root:/tpCloud/%C3%9A%C4%8Detn%C3%AD%20agendy:/children?$select=id,name,webUrl&$top=200&$orderby=name`);
+    allAgendas = (data.value||[])
+      .filter(f => f.name && f.name.match(/^[A-Z]{2,4} - /)) // jen složky formátu "KMA - Název"
+      .map(f => {
+        const m = f.name.match(/^([A-Z0-9]+) - (.+?)(?:\s*\(AG\d+\))?$/);
+        return {
+          name: f.name,
+          itemId: f.id,
+          kod: m ? m[1] : f.name.substring(0,4),
+          firma: m ? m[2] : f.name,
+          webUrl: f.webUrl
+        };
+      });
+    renderAgendaList(allAgendas);
+  } catch(e){
+    wrap.innerHTML = `<div class="alert err">Chyba načítání agend: ${e.message}</div>`;
+  }
+}
+
+function renderAgendaList(list){
+  const wrap = document.getElementById('agendaListWrap');
+  if(!list.length){
+    wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px">Žádné agendy nenalezeny.</div>';
+    return;
+  }
+  // Zobrazit max 30 položek
+  const show = list.slice(0,30);
+  wrap.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;max-height:360px;overflow-y:auto;padding:2px">
+      ${show.map(a=>`
+        <div onclick="selectAgenda(${JSON.stringify(a).replace(/"/g,'&quot;')})"
+          style="padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s"
+          onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--accent-bg)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.background=''">
+          <div style="font-weight:700;font-size:12px;font-family:var(--mono);color:var(--accent)">${a.kod}</div>
+          <div style="font-size:12px;margin-top:1px">${a.firma}</div>
+        </div>
+      `).join('')}
+    </div>
+    ${list.length>30?`<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:4px">Zobrazeno 30 z ${list.length} — upřesněte hledání</div>`:''}
+  `;
+}
+
+function filterAgendas(q){
+  if(!q.trim()){renderAgendaList(allAgendas);return;}
+  const ql = q.toLowerCase();
+  const filtered = allAgendas.filter(a =>
+    a.kod.toLowerCase().includes(ql) ||
+    a.firma.toLowerCase().includes(ql) ||
+    a.name.toLowerCase().includes(ql)
+  );
+  renderAgendaList(filtered);
+}
+
+function selectAgenda(agenda){
+  selectedAgenda = agenda;
+  document.getElementById('selectedAgendaBox').classList.remove('hidden');
+  document.getElementById('selectedAgendaName').textContent = agenda.firma;
+  document.getElementById('selectedAgendaPath').textContent = agenda.name;
+  document.getElementById('btnToFiles').disabled = false;
+  saveConfig();
+}
+
+// ════════════════════════════════════════════════════════════════
 // KONFIGURACE & STATE
 // ════════════════════════════════════════════════════════════════
 const DRIVE_ID = 'b!40JzbtVKe0-O-UMoFXPzUjVOSWJcVsRPgu5Do4X00fOW3S31NcrnQJFbA7NPBVEE';
@@ -402,7 +546,7 @@ let analysisResult = null;
 // ════════════════════════════════════════════════════════════════
 // CONFIG — localStorage
 // ════════════════════════════════════════════════════════════════
-const CFG_KEYS = ['cfgClientId','cfgTenantId','cfgAgKod','cfgFirma','cfgRok',
+const CFG_KEYS = ['cfgClientId','cfgTenantId','cfgRok',
                   'cfgFU','cfgBanAcc','cfgBanKod','cfgZavRada','cfgUser'];
 function cfg(id){ return (document.getElementById(id)?.value||'').trim(); }
 function saveConfig(){
@@ -415,13 +559,20 @@ function saveConfig(){
     CFG_KEYS.forEach(k=>{const el=document.getElementById(k);if(el&&o[k])el.value=o[k];});
   }catch(e){}
   document.getElementById('redirectUriDisplay').textContent='https://lrichnavsky.github.io/dph-kontrola/';
+  const _now=new Date();
+  const _pm=_now.getMonth()===0?12:_now.getMonth();
+  const _py=_pm===12?_now.getFullYear()-1:_now.getFullYear();
+  const _ccM=document.getElementById('ccMonth');
+  const _ccY=document.getElementById('ccYear');
+  if(_ccM)_ccM.value=String(_pm).padStart(2,'0');
+  if(_ccY)_ccY.value=String(_py);
 })();
 
 // ════════════════════════════════════════════════════════════════
 // STEPS
 // ════════════════════════════════════════════════════════════════
 function goStep(n){
-  [1,2,3,4,5].forEach(i=>{
+  [1,2,3,4,5,6].forEach(i=>{
     document.getElementById('pane'+i).classList.toggle('hidden',i!==n);
     const s=document.getElementById('step'+i);
     s.classList.remove('active');
@@ -470,6 +621,8 @@ async function msalLogin(){
     logTo('loginLog','Přihlášení úspěšné.','ok');
     document.getElementById('step2').classList.add('done');
     goStep(2);
+    // Automaticky načíst seznam agend
+    loadAgendaList();
   } catch(e){
     logTo('loginLog','Chyba přihlášení: '+e.message,'err');
   }
@@ -556,13 +709,14 @@ async function getItemByPath(path){
 // NAČTENÍ HISTORIE ZE SP
 // ════════════════════════════════════════════════════════════════
 async function spLoadHistory(){
-  const agKod = cfg('cfgAgKod');
-  const firma = cfg('cfgFirma');
+  if(!selectedAgenda){ alert('Nejdřív vyberte agendu klienta.'); return; }
+
+  const agKod = selectedAgenda.kod;
+  const firma = selectedAgenda.firma;
   const rok   = cfg('cfgRok');
-  if(!agKod && !firma){ alert('Vyplňte kód agenty nebo název firmy.'); return; }
 
   clearLog('histLog');
-  logTo('histLog',`Hledám složku agenty (${agKod||firma}) na SharePointu...`,'info');
+  logTo('histLog',`Hledám DPH soubory: ${selectedAgenda.name} / ${rok}...`,'info');
   histFiles=[];
   renderHistList();
 
@@ -583,26 +737,28 @@ async function spLoadHistory(){
 
     logTo('histLog',`Celkem ${allFiles.length} DPH souborů nalezeno v celém drive. Filtruji pro klienta...`,'info');
 
-    // Filtrovat jen soubory pro tuto agentu + rok
-    const pattern = (agKod||firma).toLowerCase();
+    // Filtrovat podle přesného názvu složky agenty (webUrl obsahuje název složky)
+    const agendaNameL = selectedAgenda.name.toLowerCase();
+    const agKodL = agKod.toLowerCase();
+    const firmaL = firma.toLowerCase();
+
     const filtered = allFiles.filter(f=>{
-      const path = (f.parentReference?.path||'').toLowerCase();
-      const yearOk = path.includes('/'+rok+'/') || path.includes('/'+rok.substring(2)+'/');
-      const agOk   = path.includes(pattern) || path.includes(agKod?.toLowerCase()||'__');
+      const url = decodeURIComponent((f.webUrl||'').toLowerCase());
+      const yearOk = url.includes('/'+rok+'/') || url.includes('/'+rok.substring(2)+'/');
+      const agOk   = url.includes(agendaNameL) || url.includes(agKodL+' -') || url.includes(firmaL);
       return agOk && yearOk;
     });
 
-    // Také soubory z předchozího roku (pro kontrolu duplicit)
     const prevRok = String(parseInt(rok)-1);
     const filteredPrev = allFiles.filter(f=>{
-      const path = (f.parentReference?.path||'').toLowerCase();
-      const yearOk = path.includes('/'+prevRok+'/') || path.includes('/'+prevRok.substring(2)+'/');
-      const agOk   = path.includes(pattern) || path.includes(agKod?.toLowerCase()||'__');
+      const url = decodeURIComponent((f.webUrl||'').toLowerCase());
+      const yearOk = url.includes('/'+prevRok+'/') || url.includes('/'+prevRok.substring(2)+'/');
+      const agOk   = url.includes(agendaNameL) || url.includes(agKodL+' -') || url.includes(firmaL);
       return agOk && yearOk;
     });
 
     const toLoad = [...filteredPrev, ...filtered];
-    logTo('histLog',`Filtrovano: ${toLoad.length} souborů (${rok} + ${prevRok}). Stahuji...`,'info');
+    logTo('histLog',`Filtrovano: ${filtered.length} souborů rok ${rok} + ${filteredPrev.length} souborů rok ${prevRok} = celkem ${toLoad.length}. Stahuji...`,'info');
 
     for(const f of toLoad){
       logTo('histLog',`↓ ${f.name}...`);
@@ -882,21 +1038,47 @@ function renderAnalysis(){
 // ════════════════════════════════════════════════════════════════
 // XML GENEROVÁNÍ — pouze součty, žádná citlivá data
 // ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// XML GENEROVÁNÍ — závazek (odvod) nebo pohledávka (vratka)
+// ════════════════════════════════════════════════════════════════
 function renderXml(){
   const r=analysisResult;
   document.getElementById('xmlWarnDiv').classList.toggle('hidden',r.dc===0&&r.ds===0);
   const dates=currentFile.rows.map(x=>x.datZd).filter(Boolean).sort();
   const lastDate=dates[dates.length-1]||new Date().toISOString().substring(0,10);
   const perioda=lastDate.substring(0,7).replace('-','');
-  const v=Math.abs(r.dphSum.odvod);
-  document.getElementById('xmlZ').textContent=genZav(lastDate,v,perioda);
-  document.getElementById('xmlI').textContent=genInt(lastDate,v,perioda);
+  const odvod=r.dphSum.odvod; // kladné = platit, záporné = vratka
+  const absVal=Math.abs(odvod);
+
+  const isOdvod = odvod > 0;
+  // Typ badge
+  const badge=document.getElementById('xmlTypeBadge');
+  const lbl=document.getElementById('xmlTypeLabel');
+  const note=document.getElementById('xmlTypeNote');
+  const card1=document.getElementById('xmlCard1Title');
+  if(isOdvod){
+    lbl.textContent='📤 Vlastní daňová povinnost — ODVOD';
+    lbl.style.color='var(--err)';
+    note.textContent=`Generuje se ZÁVAZEK (${fmt(absVal)} Kč) + Interní doklad`;
+    card1.textContent='Závazek — odvod DPH';
+    document.getElementById('xmlZ').textContent=genZavazek(lastDate,absVal,perioda);
+  } else {
+    lbl.textContent='📥 Nadměrný odpočet — VRATKA';
+    lbl.style.color='var(--ok)';
+    note.textContent=`Generuje se POHLEDÁVKA (${fmt(absVal)} Kč) + Interní doklad`;
+    card1.textContent='Pohledávka — vratka DPH';
+    document.getElementById('xmlZ').textContent=genPohledavka(lastDate,absVal,perioda);
+  }
+  document.getElementById('xmlI').textContent=genInterni(lastDate,odvod,perioda);
 }
 
-function genZav(d,v,p){return`<?xml version="1.0" encoding="utf-8"?>
+// ZÁVAZEK — daňová povinnost (odvod > 0)
+function genZavazek(d,v,p){
+  const yr=d.substring(0,4);
+  return `<?xml version="1.0" encoding="utf-8"?>
 <winstrom version="1.0" source="FlexiBee">
   <zavazek>
-    <kod>ZAV26XXXX</kod>
+    <kod>ZAV${yr}XXXX</kod>
     <datVyst>${d}</datVyst>
     <duzpPuv>${d}</duzpPuv>
     <duzpUcto>${d}</duzpUcto>
@@ -927,26 +1109,31 @@ function genZav(d,v,p){return`<?xml version="1.0" encoding="utf-8"?>
     <stredisko evidencePath="stredisko">code:C</stredisko>
     <uzivatel evidencePath="uzivatel">code:${cfg('cfgUser')}</uzivatel>
     <zodpOsoba evidencePath="uzivatel">code:richnavsky</zodpOsoba>
+    <firma evidencePath="adresar">code:ÚP PRAHA 8</firma>
     <rada evidencePath="rada-zavazku" if-not-found="null">code:${cfg('cfgZavRada')}</rada>
     <sazbaDphOsv evidencePath="sazba-dph">key:CZ_0_1993</sazbaDphOsv>
     <sazbaDphSniz evidencePath="sazba-dph">key:CZ_1200_2024</sazbaDphSniz>
     <sazbaDphZakl evidencePath="sazba-dph">key:CZ_21_2013</sazbaDphZakl>
+    <bankovniUcet evidencePath="bankovni-ucet">code:FIO-CZK</bankovniUcet>
     <smerKod evidencePath="penezni-ustav">code:${cfg('cfgBanKod')}</smerKod>
     <clenKonVykDph evidencePath="cleneni-kontrolni-hlaseni">code:0.0.</clenKonVykDph>
     <formaUhradyCis evidencePath="forma-uhrady">code:PREVOD</formaUhradyCis>
   </zavazek>
 </winstrom>`;}
 
-function genInt(d,v,p){return`<?xml version="1.0" encoding="utf-8"?>
+// POHLEDÁVKA — nadměrný odpočet (odvod < 0)
+function genPohledavka(d,v,p){
+  const yr=d.substring(0,4);
+  return `<?xml version="1.0" encoding="utf-8"?>
 <winstrom version="1.0" source="FlexiBee">
-  <interni-doklad>
-    <kod>IN00XX/2026</kod>
-    <cisDosle>${p.padStart(8,'0')}</cisDosle>
-    <varSym>${p.padStart(8,'0')}</varSym>
+  <pohledavka>
+    <kod>PH${yr}XXXX</kod>
     <datVyst>${d}</datVyst>
     <duzpPuv>${d}</duzpPuv>
+    <duzpUcto>${d}</duzpUcto>
     <datSazbyDph>${d}</datSazbyDph>
-    <popis>Zaúčtování DPH ${p}</popis>
+    <popis>vratka DPH - ${p}</popis>
+    <varSym>${p}</varSym>
     <sumOsv>${v.toFixed(1)}</sumOsv>
     <sumZklSniz>0.0</sumZklSniz><sumZklSniz2>0.0</sumZklSniz2>
     <sumZklZakl>0.0</sumZklZakl>
@@ -956,6 +1143,50 @@ function genInt(d,v,p){return`<?xml version="1.0" encoding="utf-8"?>
     <sumCelkSniz>0.0</sumCelkSniz><sumCelkSniz2>0.0</sumCelkSniz2>
     <sumCelkZakl>0.0</sumCelkZakl>
     <sumCelkem>${v.toFixed(1)}</sumCelkem>
+    <kurz>0.0</kurz><kurzMnozstvi>0.0</kurzMnozstvi>
+    <bezPolozek>false</bezPolozek><ucetni>true</ucetni>
+    <szbDphSniz>12.0</szbDphSniz><szbDphSniz2>0.0</szbDphSniz2><szbDphZakl>21.0</szbDphZakl>
+    <zuctovano>true</zuctovano><datUcto>${d}</datUcto><storno>false</storno>
+    <typDokl evidencePath="typ-pohledavky">code:OST. POHLEDÁVKY</typDokl>
+    <mena evidencePath="mena">code:CZK</mena>
+    <primUcet evidencePath="ucet">code:378343</primUcet>
+    <protiUcet evidencePath="ucet">code:343999</protiUcet>
+    <statDph evidencePath="stat-dph">code:CZ</statDph>
+    <clenDph evidencePath="cleneni-dph">code:000P</clenDph>
+    <stredisko evidencePath="stredisko">code:C</stredisko>
+    <uzivatel evidencePath="uzivatel">code:${cfg('cfgUser')}</uzivatel>
+    <zodpOsoba evidencePath="uzivatel">code:richnavsky</zodpOsoba>
+    <rada evidencePath="rada-pohledavky" if-not-found="null">code:OSTATNÍ POHLEDÁVKY</rada>
+    <sazbaDphOsv evidencePath="sazba-dph">key:CZ_0_1993</sazbaDphOsv>
+    <sazbaDphSniz evidencePath="sazba-dph">key:CZ_1200_2024</sazbaDphSniz>
+    <sazbaDphZakl evidencePath="sazba-dph">key:CZ_21_2013</sazbaDphZakl>
+    <clenKonVykDph evidencePath="cleneni-kontrolni-hlaseni">code:0.0.</clenKonVykDph>
+  </pohledavka>
+</winstrom>`;}
+
+// INTERNÍ DOKLAD — vždy, kladná nebo záporná hodnota odvodu
+function genInterni(d,odvod,p){
+  const v=odvod.toFixed(1); // zachovat znaménko!
+  const yr=d.substring(0,4);
+  return `<?xml version="1.0" encoding="utf-8"?>
+<winstrom version="1.0" source="FlexiBee">
+  <interni-doklad>
+    <kod>IN00XX/${yr}</kod>
+    <cisDosle>${p.padStart(8,'0')}</cisDosle>
+    <varSym>${p.padStart(8,'0')}</varSym>
+    <datVyst>${d}</datVyst>
+    <duzpPuv>${d}</duzpPuv>
+    <datSazbyDph>${d}</datSazbyDph>
+    <popis>Zaúčtování DPH ${p}</popis>
+    <sumOsv>${v}</sumOsv>
+    <sumZklSniz>0.0</sumZklSniz><sumZklSniz2>0.0</sumZklSniz2>
+    <sumZklZakl>0.0</sumZklZakl>
+    <sumZklCelkem>${v}</sumZklCelkem>
+    <sumDphSniz>0.0</sumDphSniz><sumDphSniz2>0.0</sumDphSniz2>
+    <sumDphZakl>0.0</sumDphZakl><sumDphCelkem>0.0</sumDphCelkem>
+    <sumCelkSniz>0.0</sumCelkSniz><sumCelkSniz2>0.0</sumCelkSniz2>
+    <sumCelkZakl>0.0</sumCelkZakl>
+    <sumCelkem>${v}</sumCelkem>
     <kurz>0.0</kurz><kurzMnozstvi>0.0</kurzMnozstvi>
     <bezPolozek>false</bezPolozek><ucetni>true</ucetni>
     <szbDphSniz>12.0</szbDphSniz><szbDphSniz2>0.0</szbDphSniz2><szbDphZakl>21.0</szbDphZakl>
@@ -976,12 +1207,180 @@ function genInt(d,v,p){return`<?xml version="1.0" encoding="utf-8"?>
 </winstrom>`;}
 
 // ════════════════════════════════════════════════════════════════
+// COMPLETENESS CHECK — kontrola úplnosti DPH u všech agend
+// ════════════════════════════════════════════════════════════════
+async function runCompletenessCheck(){
+  const month = document.getElementById('ccMonth').value;  // "05"
+  const year  = document.getElementById('ccYear').value;   // "2026"
+  const shortYear = year.substring(2);  // "26"
+
+  // Možné formáty složky: 0526, 052026, 0526, 05/2026 atd.
+  // Hledáme: obsahuje měsíc+rok v různých kombinacích
+  const patterns = [
+    month+shortYear,        // 0526
+    month+year,             // 052026
+    year+month,             // 202605
+    month+'.'+year,         // 05.2026
+    month+'/'+year,         // 05/2026
+  ];
+
+  clearLog('ccLog');
+  document.getElementById('ccResults').innerHTML='';
+  logTo('ccLog',`Kontroluji úplnost DPH za ${month}/${year}...`,'info');
+
+  try{
+    // Vyhledat všechny soubory Podklady_DPH pro daný měsíc+rok
+    const t = await getToken();
+
+    // Hledat složky odpovídající danému DPH období
+    // Strategie: prohledáme Drive search pro složky s názvem obsahujícím pattern
+    logTo('ccLog',`Hledám složky "${month+shortYear}" a "${month+year}" v Účetní agendy...`,'info');
+
+    // Načíst seznam všech agend (children Účetní agendy)
+    const agendyData = await graphGet(`/drives/${DRIVE_ID}/root:/tpCloud/%C3%9A%C4%8Detn%C3%AD%20agendy:/children?$select=id,name,webUrl&$top=200&$orderby=name`);
+    const agendyAll = (agendyData.value||[]).filter(f=>f.name&&f.name.match(/^[A-Z]{2,4} - /));
+
+    logTo('ccLog',`Nalezeno ${agendyAll.length} agend. Kontroluji každou...`,'info');
+
+    const results=[];
+    let done=0;
+
+    for(const agenda of agendyAll){
+      // Přeskočit Archiv a similar
+      if(agenda.name.toLowerCase().includes('archiv')) continue;
+
+      done++;
+      if(done%5===0) logTo('ccLog',`Zpracováno ${done}/${agendyAll.length}...`);
+
+      // Zkusit najít složku KH a DPH / rok / měsíc
+      const dphBasePath = `tpCloud/Účetní agendy/${agenda.name}/PŘIZNÁNÍ_PODÁNÍ/KH a DPH/${year}`;
+      let folderFound = null;
+      let files = [];
+      let status = 'missing'; // missing | empty | ok
+
+      try{
+        // Načíst obsah roku
+        const yearFolderData = await graphGet(
+          `/drives/${DRIVE_ID}/root:/${encodeURIComponentPath(dphBasePath)}:/children?$select=id,name,webUrl,file,folder,lastModifiedDateTime&$top=100`
+        );
+        const yearChildren = yearFolderData.value||[];
+
+        // Hledat složku pro daný měsíc (různé formáty)
+        const monthFolder = yearChildren.find(f=>f.folder&&patterns.some(p=>f.name.toLowerCase().includes(p.toLowerCase())));
+
+        if(monthFolder){
+          folderFound = monthFolder;
+          status = 'empty';
+          // Načíst obsah složky měsíce
+          const monthChildren = await graphGet(
+            `/drives/${DRIVE_ID}/items/${monthFolder.id}/children?$select=id,name,webUrl,file,folder,lastModifiedDateTime&$top=100`
+          );
+          const allItems = monthChildren.value||[];
+
+          // Rekurzivně projít podsložky (DPH - řádné, DPH - opravné atd.)
+          for(const item of allItems){
+            if(item.folder){
+              const sub = await graphGet(`/drives/${DRIVE_ID}/items/${item.id}/children?$select=id,name,webUrl,file,lastModifiedDateTime&$top=50`);
+              (sub.value||[]).filter(f=>f.file).forEach(f=>files.push({...f, subfolder:item.name}));
+            } else if(item.file){
+              files.push({...item, subfolder:''});
+            }
+          }
+          if(files.length>0) status='ok';
+        }
+      } catch(e){
+        // Složka KH a DPH nebo rok neexistuje — agenda možná není plátce nebo jiná struktura
+        status='no-dph';
+      }
+
+      const agKod = agenda.name.match(/^([A-Z0-9]+)/)?.[1]||'';
+      results.push({
+        kod:agKod, nazev:agenda.name, webUrl:agenda.webUrl,
+        status, folderFound, files,
+        monthFolder: folderFound?.name||null
+      });
+    }
+
+    logTo('ccLog',`Kontrola dokončena. Zpracováno ${results.length} agend.`,'ok');
+    renderCompletenessResults(results, month, year);
+
+  } catch(e){
+    logTo('ccLog','Chyba: '+e.message,'err');
+  }
+}
+
+function encodeURIComponentPath(path){
+  return path.split('/').map(s=>encodeURIComponent(s)).join('/');
+}
+
+function renderCompletenessResults(results, month, year){
+  const ok     = results.filter(r=>r.status==='ok');
+  const empty  = results.filter(r=>r.status==='empty');
+  const missing= results.filter(r=>r.status==='missing');
+  const noDph  = results.filter(r=>r.status==='no-dph');
+
+  // Statistiky
+  let html = `
+  <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+    <div class="stat ok"><div class="sv">${ok.length}</div><div class="sl">✓ Složka se soubory</div></div>
+    <div class="stat ${empty.length>0?'warn':'ok'}"><div class="sv">${empty.length}</div><div class="sl">⚠ Složka prázdná</div></div>
+    <div class="stat ${missing.length>0?'err':'ok'}"><div class="sv">${missing.length}</div><div class="sl">✗ Složka chybí</div></div>
+    <div class="stat"><div class="sv">${noDph.length}</div><div class="sl">– Bez DPH struktury</div></div>
+  </div>`;
+
+  // Agenda karty — seřadit: chybějící → prázdné → ok → bez DPH
+  const sorted = [
+    ...missing.sort((a,b)=>a.kod.localeCompare(b.kod)),
+    ...empty.sort((a,b)=>a.kod.localeCompare(b.kod)),
+    ...ok.sort((a,b)=>a.kod.localeCompare(b.kod)),
+    ...noDph.sort((a,b)=>a.kod.localeCompare(b.kod)),
+  ];
+
+  html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px">`;
+
+  for(const r of sorted){
+    const statusColor = r.status==='ok'?'var(--ok)':r.status==='empty'?'var(--warn)':r.status==='missing'?'var(--err)':'var(--muted)';
+    const statusBg    = r.status==='ok'?'var(--ok-bg)':r.status==='empty'?'var(--warn-bg)':r.status==='missing'?'var(--err-bg)':'var(--bg)';
+    const statusIcon  = r.status==='ok'?'✓':r.status==='empty'?'⚠':r.status==='missing'?'✗':'–';
+    const statusText  = r.status==='ok'?`Složka: ${r.monthFolder||'?'} (${r.files.length} souborů)`:
+                        r.status==='empty'?`Složka ${r.monthFolder||'?'} existuje, ale je prázdná`:
+                        r.status==='missing'?`Složka ${month+year.substring(2)} / ${month+year} nenalezena`:
+                        'Nemá strukturu KH a DPH / '+year;
+
+    html+=`<div style="border:1.5px solid ${statusColor};border-radius:var(--r);overflow:hidden;background:var(--surface)">
+      <div style="padding:8px 12px;background:${statusBg};display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-weight:800;font-size:13px;color:${statusColor};font-family:var(--mono)">${r.kod}</span>
+          <span style="font-size:11px;font-weight:600;color:${statusColor}">${statusIcon}</span>
+        </div>
+        <a href="${r.webUrl}" target="_blank" style="font-size:10px;color:${statusColor};text-decoration:none">↗ SP</a>
+      </div>
+      <div style="padding:8px 12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${r.nazev.replace(/\(AG\d+\)/,'').trim()}</div>
+        <div style="font-size:11px;color:${statusColor};font-weight:600;margin-bottom:6px">${statusText}</div>
+        ${r.files.length>0?`<div style="display:flex;flex-direction:column;gap:2px">
+          ${r.files.map(f=>`<a href="${f.webUrl}" target="_blank" style="font-size:10px;font-family:var(--mono);color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block" title="${f.name}">
+            ${f.subfolder?`<span style="color:var(--muted)">[${f.subfolder}] </span>`:''}${f.name}
+          </a>`).join('')}
+        </div>`:''}
+      </div>
+    </div>`;
+  }
+  html+='</div>';
+
+  document.getElementById('ccResults').innerHTML=html;
+}
+
+// ════════════════════════════════════════════════════════════════
 // UTILITIES
 // ════════════════════════════════════════════════════════════════
 function downloadXml(type){
   const el=document.getElementById(type==='z'?'xmlZ':'xmlI');
   const p=currentFile?.printDate?.substring(0,7).replace('-','')||'';
-  const fn=type==='z'?`zavazek_DPH_${p}.xml`:`interni_DPH_${p}.xml`;
+  const isOdvod = analysisResult?.dphSum?.odvod > 0;
+  const fn=type==='z'
+    ?(isOdvod?`zavazek_DPH_${p}.xml`:`pohledavka_DPH_${p}.xml`)
+    :`interni_DPH_${p}.xml`;
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([el.textContent],{type:'text/xml;charset=utf-8'}));
   a.download=fn;a.click();
