@@ -1016,7 +1016,10 @@ function parseXlsxToRows(wb){
   for(let i=0;i<raw.length;i++){
     if(raw[i].some(c=>String(c)==='Modul')){hdrIdx=i;break;}
   }
-  if(hdrIdx<0) return [];
+  if(hdrIdx<0){
+    console.warn('parseXlsxToRows: záhlaví "Modul" nenalezeno. Prvních 5 řádků:', raw.slice(0,5));
+    return [];
+  }
 
   const hdr = raw[hdrIdx];
   const x = {};
@@ -1068,15 +1071,29 @@ const fmt    = n => n.toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFra
 const fmtDiff= n => { const s=n>=0?'+':''; return s+fmt(n); };
 
 function runAnalysis(){
-  if(!currentFile) return;
+  if(!currentFile){
+    alert('Není načten žádný soubor.');
+    return;
+  }
+  if(!currentFile._rawData){
+    alert('Soubor nemá raw data — nahrajte ho znovu.');
+    return;
+  }
 
+  try{
   // Parsovat aktuální soubor (od začátku roku)
   const wb = XLSX.read(currentFile._rawData, {type:'array', cellDates:true});
   const curRows = parseXlsxToRows(wb);
 
+  if(curRows.length === 0){
+    document.getElementById('statsBar').innerHTML='<div class="alert err" style="grid-column:1/-1">Soubor byl načten ale neobsahuje žádné doklady — zkontrolujte formát (musí být Podklady DPH seskupené z AbraFlexi).</div>';
+    return;
+  }
+
   // Parsovat všechny historické soubory
   const histRows = []; // [{...row, _srcFile}]
   histFiles.forEach(hf=>{
+    if(!hf._rawData) return;
     const hwb = XLSX.read(hf._rawData, {type:'array', cellDates:true});
     const hfRows = parseXlsxToRows(hwb);
     hfRows.forEach(r=>histRows.push({...r, _srcFile:hf.name, _srcDate:hf.printDate}));
@@ -1184,6 +1201,11 @@ function runAnalysis(){
   // XML pro poslední měsíc
   const months = Object.values(monthResults).sort((a,b)=>(a.rok*100+a.mes)-(b.rok*100+b.mes));
   if(months.length) renderXmlForMonth(months[months.length-1]);
+
+  } catch(e) {
+    console.error('runAnalysis error:', e);
+    document.getElementById('statsBar').innerHTML=`<div class="alert err" style="grid-column:1/-1">Chyba analýzy: ${e.message}<br><small>${e.stack?.split('\n')[1]||''}</small></div>`;
+  }
 }
 
 function renderAnalysis(){
