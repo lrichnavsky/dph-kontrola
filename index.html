@@ -1169,7 +1169,7 @@ async function spLoadHistory(flow){
   if(!s.selectedAgenda){ alert('Nejdřív vyberte agendu.'); return; }
   const rok = cfg('cfgRok'+flow.toUpperCase())||'2026';
   const isYearly = flow==='c';
-  const rokyKNacteni = isYearly ? [rok] : [String(parseInt(rok)-1), rok];
+  const rokyKNacteni = isYearly ? [rok] : [rok];  // průběžná: jen aktuální rok
 
   clearLog('histLog'+flow.toUpperCase());
   s.histFiles=[];
@@ -1277,7 +1277,8 @@ async function selectSpCurrent(itemId, name, lastMod, webUrlEnc, flow){
 // ════════════════════════════════════════════════════════════════
 // LOCAL FILE UPLOAD
 // ════════════════════════════════════════════════════════════════
-function doDragOver(e, flow){ e.preventDefault(); document.getElementById('dz'+flow.toUpperCase()).classList.add('over'); }
+function doDragOver(e, flow){ e.preventDefault(); if(flow==='g'){document.getElementById('dzGpc').classList.add('over');return;}
+  document.getElementById('dz'+flow.toUpperCase()).classList.add('over'); }
 function doDragLeave(flow){ document.getElementById('dz'+flow.toUpperCase()).classList.remove('over'); }
 function doDrop(e, flow){ e.preventDefault(); doDragLeave(flow); if(e.dataTransfer.files[0])handleLocalFile(e.dataTransfer.files[0],flow); }
 
@@ -2091,6 +2092,135 @@ function clearAll(){
 // ════════════════════════════════════════════════════════════════
 // GPC AGENT — ČSOB výpis → .gpc soubor
 // ════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════
+// GPC AGENT — konfigurace bank
+// ════════════════════════════════════════════════════════════════
+const GPC_BANKS = {
+  csob: {
+    name:'ČSOB', fullName:'Československá obchodní banka', bankCode:'0300',
+    prompt:`Jsi specialista na česká bankovní data. Z obrázků bankovního výpisu ČSOB extrahuješ všechna data a vracíš JEN čistý JSON. Bez textu navíc, bez markdown bloků.
+
+JSON struktura:
+{"header":{"accountNo":"315661161","accountName":"Jméno Příjmení","dateOld":"010326","oldBal":0,"oldSign":"+","newBal":0,"newSign":"+","debTotal":0,"credTotal":0,"seqNo":3,"dateAcc":"010326"},"transactions":[{"dateDue":"020326","contraAccount":"0","docNo":"2895","amountHal":36179,"dc":1,"vs":"0","ks":"0300001178","ss":"0","name":""}]}
+
+Pravidla:
+- accountNo: číslo účtu bez předčíslí a kódu banky
+- dateOld: DDMMRR formát (první den období)
+- oldBal/newBal/debTotal/credTotal: v HALÉŘÍCH, vždy kladné
+- dateDue: DDMMRR formát
+- amountHal: v haléřích, vždy kladné
+- dc: 1=debet(výdaj), 2=kredit(příjem)
+- ks: 0300 + KS ze výpisu na 6 míst (celkem 10 číslic). Pokud chybí: "0000000000"
+- contraAccount: číslo protiúčtu jen číslice, bez kódu banky. Pokud chybí: "0"
+- seqNo: číslo za lomítkem z Rok/č. výpisu
+- Zpracuj VŠECHNY transakce ze všech stránek výpisu`
+  },
+  kb: {
+    name:'KB', fullName:'Komerční banka', bankCode:'0100',
+    prompt:`Jsi specialista na česká bankovní data. Z obrázků bankovního výpisu Komerční banky (KB) extrahuješ všechna data a vracíš JEN čistý JSON. Bez textu navíc, bez markdown bloků.
+
+JSON struktura:
+{"header":{"accountNo":"123456789","accountName":"Jméno Příjmení","dateOld":"010326","oldBal":0,"oldSign":"+","newBal":0,"newSign":"+","debTotal":0,"credTotal":0,"seqNo":1,"dateAcc":"010326"},"transactions":[{"dateDue":"020326","contraAccount":"0","docNo":"1","amountHal":0,"dc":1,"vs":"0","ks":"0100000000","ss":"0","name":""}]}
+
+Pravidla:
+- accountNo: číslo účtu bez předčíslí a kódu banky
+- dateOld/dateDue: DDMMRR formát
+- oldBal/newBal/debTotal/credTotal: v HALÉŘÍCH — čti z první stránky ze sekce Souhrnné informace, NIKDY nepočítej sám
+- dc: 1=debet, 2=kredit
+- ks: 0100 + KS na 6 míst. Pokud chybí: "0100000000"
+- VS/SS: pole z výpisu KB
+- docNo: referenční číslo transakce z výpisu KB
+- seqNo: číslo za lomítkem z Rok/č. výpisu
+- Zpracuj VŠECHNY transakce ze všech stránek výpisu`
+  },
+  cs: {
+    name:'ČS', fullName:'Česká spořitelna', bankCode:'0800',
+    prompt:`Jsi specialista na česká bankovní data. Z obrázků bankovního výpisu České spořitelny extrahuješ všechna data a vracíš JEN čistý JSON. Bez textu navíc, bez markdown bloků.
+
+JSON struktura:
+{"header":{"accountNo":"123456789","accountName":"Jméno Příjmení","dateOld":"010326","oldBal":0,"oldSign":"+","newBal":0,"newSign":"+","debTotal":0,"credTotal":0,"seqNo":1,"dateAcc":"010326"},"transactions":[{"dateDue":"020326","contraAccount":"0","docNo":"1","amountHal":0,"dc":1,"vs":"0","ks":"0800000000","ss":"0","name":""}]}
+
+Pravidla:
+- accountNo: číslo účtu bez předčíslí a kódu banky
+- dateOld/dateDue: DDMMRR formát
+- oldBal/newBal/debTotal/credTotal: v HALÉŘÍCH — čti z první stránky ze sekce Souhrnné informace, NIKDY nepočítej sám
+- dc: 1=debet, 2=kredit
+- ks: 0800 + KS na 6 míst. Pokud chybí: "0800000000"
+- VS/SS: variabilní a specifický symbol z výpisu ČS
+- docNo: identifikační číslo transakce z výpisu ČS
+- seqNo: číslo za lomítkem z Rok/č. výpisu
+- Zpracuj VŠECHNY transakce ze všech stránek výpisu`
+  },
+  rb: {
+    name:'RB', fullName:'Raiffeisenbank', bankCode:'5500',
+    prompt:`Jsi specialista na česká bankovní data. Z obrázků bankovního výpisu Raiffeisenbank (RB) extrahuješ všechna data a vracíš JEN čistý JSON. Bez textu navíc, bez markdown bloků.
+
+JSON struktura:
+{"header":{"accountNo":"123456789","accountName":"Jméno Příjmení","dateOld":"010326","oldBal":0,"oldSign":"+","newBal":0,"newSign":"+","debTotal":0,"credTotal":0,"seqNo":1,"dateAcc":"010326"},"transactions":[{"dateDue":"020326","contraAccount":"0","docNo":"1","amountHal":0,"dc":1,"vs":"0","ks":"5500000000","ss":"0","name":""}]}
+
+Pravidla:
+- accountNo: číslo účtu bez předčíslí a kódu banky
+- dateOld/dateDue: DDMMRR formát
+- oldBal/newBal/debTotal/credTotal: v HALÉŘÍCH — čti VŽDY jen z první stránky, NIKDY nepočítej sám
+- dc: 1=debet, 2=kredit
+- ks: 5500 + KS na 6 míst. Pokud chybí: "5500000000"
+- VS/SS: variabilní a specifický symbol z výpisu RB
+- docNo: referenční číslo transakce
+- seqNo: číslo za lomítkem z Rok/č. výpisu
+- Pozor: Raiffeisen výpis může mít desítky stránek — zpracuj VŠECHNY transakce bez výjimky`
+  },
+  moneta: {
+    name:'Moneta', fullName:'Moneta Money Bank', bankCode:'0600',
+    prompt:`Jsi specialista na česká bankovní data. Z obrázků bankovního výpisu Moneta Money Bank extrahuješ všechna data a vracíš JEN čistý JSON. Bez textu navíc, bez markdown bloků.
+
+JSON struktura:
+{"header":{"accountNo":"123456789","accountName":"Jméno Příjmení","dateOld":"010326","oldBal":0,"oldSign":"+","newBal":0,"newSign":"+","debTotal":0,"credTotal":0,"seqNo":1,"dateAcc":"010326"},"transactions":[{"dateDue":"020326","contraAccount":"0","docNo":"1","amountHal":0,"dc":1,"vs":"0","ks":"0600000000","ss":"0","name":""}]}
+
+Pravidla:
+- accountNo: číslo účtu bez předčíslí a kódu banky
+- dateOld/dateDue: DDMMRR formát
+- oldBal/newBal/debTotal/credTotal: v HALÉŘÍCH — čti VŽDY jen z první stránky ze Souhrnné informace, NIKDY nepočítej sám
+- dc: 1=debet, 2=kredit
+- ks: 0600 + KS na 6 míst. Pokud chybí: "0600000000"
+- VS/SS: variabilní a specifický symbol z výpisu Moneta
+- docNo: referenční nebo ID číslo transakce
+- seqNo: číslo za lomítkem z Rok/č. výpisu
+- Zpracuj VŠECHNY transakce ze všech stránek výpisu`
+  }
+};
+
+let gpcSelectedBank = 'csob';
+
+function gpcSelectBank(bankId){
+  gpcSelectedBank = bankId;
+  const bank = GPC_BANKS[bankId];
+  const colors = {csob:'#003DA5',kb:'#D52B1E',cs:'#00843D',rb:'#FFCC00',moneta:'#E2001A'};
+  const textColors = {rb:'#1a1a00'};
+  // Reset all tabs
+  ['csob','kb','cs','rb','moneta'].forEach(id=>{
+    const btn = document.getElementById('gpcTab_'+id);
+    if(!btn) return;
+    btn.classList.remove('active');
+    btn.style.background='';btn.style.color='';btn.style.borderColor='';
+  });
+  // Activate selected
+  const activeBtn = document.getElementById('gpcTab_'+bankId);
+  if(activeBtn){
+    activeBtn.classList.add('active');
+    activeBtn.style.background = colors[bankId]||'#1C2B4A';
+    activeBtn.style.color = textColors[bankId]||'#fff';
+    activeBtn.style.borderColor = colors[bankId]||'#1C2B4A';
+  }
+  // Update bank box
+  const dot = document.getElementById('gpcBankDot');
+  const name = document.getElementById('gpcBankName');
+  const code = document.getElementById('gpcBankCode');
+  if(dot) dot.style.background = colors[bankId]||'#1C2B4A';
+  if(name) name.textContent = bank.fullName;
+  if(code) code.textContent = 'kód '+bank.bankCode;
+}
+
 const GPC_MODEL = 'claude-sonnet-4-6';
 
 const GPC_SYSTEM = `Jsi specialista na česká bankovní data. Z obrázků bankovního výpisu ČSOB extrahuješ všechna data a vracíš JEN čistý JSON bez jakéhokoliv textu navíc, bez markdown bloků, bez vysvětlení.
@@ -2123,8 +2253,8 @@ let gpcPdfUrl = null;
 let gpcPdfLabel = '';
 
 // ── Drag & Drop ──
-function gpcDragOver(e){ e.preventDefault(); document.getElementById('dzG').classList.add('over'); }
-function gpcDragLeave(){ document.getElementById('dzG').classList.remove('over'); }
+function gpcDragOver(e){ e.preventDefault(); document.getElementById('dzGpc').classList.add('over'); }
+function gpcDragLeave(){ document.getElementById('dzGpc').classList.remove('over'); }
 function gpcDrop(e){ e.preventDefault(); gpcDragLeave(); gpcHandleFiles(e.dataTransfer.files); }
 
 function gpcHandleFiles(selected){
@@ -2139,15 +2269,14 @@ function gpcHandleFiles(selected){
   document.getElementById('gpcJsonBtn').classList.add('hidden');
 
   // Update drop zone
-  const dz = document.getElementById('dzG');
+  const dz = document.getElementById('dzGpc');
   if(gpcFiles.length){ dz.classList.add('has-file'); }
   document.getElementById('gpcDzLabel').textContent = gpcFiles.length+' soubor(ů) připraveno';
   document.getElementById('gpcDzHint').textContent = gpcFiles.map(f=>f.name).join(', ');
 
   // Enable convert btn
   const btn = document.getElementById('gpcConvertBtn');
-  btn.disabled = false;
-  btn.style.opacity = '1';
+  if(btn){ btn.disabled = false; btn.style.opacity = '1'; }
 
   // Previews
   const prevEl = document.getElementById('gpcPreviews');
@@ -2190,7 +2319,7 @@ async function gpcConvert(){
   btn.disabled = true; btn.textContent = '⏳ Zpracovávám…';
   gpcAddLog('Načítám '+gpcFiles.length+' soubor(ů)…');
   const logEl = document.getElementById('gpcLog');
-  logEl.classList.remove('hidden');
+  if(logEl) logEl.style.display='block';
 
   try{
     const b64s = await Promise.all(gpcFiles.map(f=>new Promise((res,rej)=>{
@@ -2212,7 +2341,7 @@ async function gpcConvert(){
     const resp = await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:GPC_MODEL,max_tokens:8000,system:GPC_SYSTEM,messages:[{role:'user',content:msgContent}]})
+      body:JSON.stringify({model:GPC_MODEL,max_tokens:8000,system:GPC_BANKS[gpcSelectedBank]?.prompt||GPC_SYSTEM,messages:[{role:'user',content:msgContent}]})
     });
     if(!resp.ok) throw new Error(`API error ${resp.status}: ${await resp.text()}`);
     const apiData = await resp.json();
@@ -2271,15 +2400,17 @@ async function gpcConvert(){
     gpcAddLog('✗ Chyba: '+e.message,'err');
   }
 
-  btn.disabled=false; btn.innerHTML='⚡ Konvertovat → GPC';
+  btn.disabled=false; btn.innerHTML='⚡ Konvertovat → GPC'; btn.style.opacity='1';
 }
 
 function gpcAddLog(msg, type='info'){
   const el=document.getElementById('gpcLog');
-  el.classList.remove('hidden');
+  if(!el) return;
+  el.style.display='block';
+  const colors={ok:'#15803D',err:'#B91C1C',warn:'#B45309',info:'#4B5563'};
   const d=document.createElement('div');
-  d.className=type;
-  d.textContent='> '+msg;
+  d.className='gpc-log-line';
+  d.innerHTML='<span class="gpc-log-ts">'+new Date().toLocaleTimeString('cs-CZ')+'</span><span style="color:'+(colors[type]||colors.info)+'">'+msg+'</span>';
   el.appendChild(d);
   el.scrollTop=el.scrollHeight;
 }
@@ -2288,7 +2419,7 @@ function gpcFmt(hal){ return (hal/100).toLocaleString('cs-CZ',{minimumFractionDi
 
 function gpcRenderValidation(v, parsed){
   const el=document.getElementById('gpcValidation');
-  el.classList.remove('hidden');
+  if(el) el.style.display='block';
   const h=parsed.header, txs=parsed.transactions||[];
   const rows=[
     ['Příjmy (kredit)',v.sumCred,h.credTotal,v.credOk],
@@ -2306,20 +2437,18 @@ function gpcRenderValidation(v, parsed){
 
   const cred=txs.filter(t=>t.dc===2).length;
   const deb=txs.filter(t=>t.dc===1).length;
-  document.getElementById('gpcStats').innerHTML=`
-    <span>📋 ${txs.length} transakcí celkem</span>
-    <span style="color:var(--ok)">↑ ${cred} příchozích</span>
-    <span style="color:var(--err)">↓ ${deb} odchozích</span>`;
+  document.getElementById('gpcStats').innerHTML=
+    '<span>📋 '+txs.length+' transakcí celkem</span>'+
+    '<span style="color:#15803D">↑ '+cred+' příchozích</span>'+
+    '<span style="color:#B91C1C">↓ '+deb+' odchozích</span>';
 }
 
 function gpcRenderTransactions(txs){
   const el=document.getElementById('gpcTransactions');
-  el.classList.remove('hidden');
+  if(el) el.style.display='block';
   document.getElementById('gpcTxTitle').textContent=`Transakce (${txs.length})`;
 
-  const header=`<div style="display:grid;grid-template-columns:72px 90px 1fr 1fr 130px;gap:10px;padding:8px 18px;font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--border);background:var(--cream);position:sticky;top:0">
-    <span>Datum</span><span>Doklad</span><span>VS / SS</span><span>Protiúčet</span><span style="text-align:right">Částka</span>
-  </div>`;
+  const header='<div class="gpc-tx-hdr"><span>Datum</span><span>Doklad</span><span>VS / SS</span><span>Protiúčet</span><span style="text-align:right">Částka</span></div>';
 
   const rows=txs.map(t=>{
     const d=t.dateDue;
@@ -2339,7 +2468,7 @@ function gpcRenderTransactions(txs){
 function gpcToggleJson(){
   gpcJsonVisible=!gpcJsonVisible;
   const sec=document.getElementById('gpcJsonSection');
-  sec.classList.toggle('hidden',!gpcJsonVisible);
+  if(sec) sec.style.display=gpcJsonVisible?'block':'none';
   if(gpcJsonVisible&&gpcRawJson){
     let formatted=gpcRawJson;
     try{ formatted=JSON.stringify(JSON.parse(gpcRawJson.replace(/```json|```/g,'').trim()),null,2); }catch(e){}
@@ -2454,111 +2583,246 @@ async function buildPdfFromImages(imgDataList){
 <!-- PAGE: TOK G — GPC Agent                     -->
 <!-- ═══════════════════════════════════════════ -->
 <div id="pageG" class="page">
-<div class="app-shell">
-  <button class="back-btn" onclick="goHome()">← Zpět na výběr</button>
 
-  <div class="card">
-    <div class="card-head">
-      <span class="card-title">GPC Agent — ČSOB výpis → .gpc</span>
-      <span style="font-size:11px;background:#EEF2FF;color:#4F46E5;padding:3px 10px;border-radius:12px;font-weight:700">Claude AI · ABO formát</span>
-    </div>
-    <div class="card-body">
+<!-- GPC specific styles -->
+<style>
+.gpc-wrap { min-height: calc(100vh - 56px); background: #F5F4F0; font-family: 'DM Sans','Segoe UI',sans-serif; }
+.gpc-topbar { background: #1C2B4A; padding: 0 32px; height: 44px; display: flex; align-items: center; gap: 10px; }
+.gpc-topbar-logo { font-weight: 800; font-size: 13px; color: #fff; }
+.gpc-topbar-sep { color: rgba(255,255,255,.3); font-size: 16px; }
+.gpc-topbar-tool { font-size: 12px; color: rgba(255,255,255,.65); }
+.gpc-topbar-badge { margin-left: auto; font-size: 11px; font-weight: 600; color: rgba(255,255,255,.7); display: flex; align-items: center; gap: 6px; }
+.gpc-topbar-dot { width: 7px; height: 7px; border-radius: 50%; background: #C8A84B; }
+.gpc-hero { background: #1C2B4A; color: #fff; padding: 28px 32px 24px; }
+.gpc-hero-title { font-size: 28px; font-weight: 800; letter-spacing: -.03em; margin-bottom: 8px; }
+.gpc-hero-title span { color: #C8A84B; }
+.gpc-hero-sub { font-size: 13px; color: rgba(255,255,255,.65); line-height: 1.6; max-width: 520px; margin-bottom: 16px; }
+.gpc-hero-sub strong { color: #C8A84B; }
+.gpc-bank-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.gpc-bank-chip { font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 100px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); color: rgba(255,255,255,.85); letter-spacing: .02em; }
+.gpc-main { padding: 28px 32px; max-width: 860px; }
+.gpc-section-label { font-size: 11px; font-weight: 700; color: #4B5563; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+/* Bank selector */
+.gpc-bank-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0; }
+.gpc-bank-tab { padding: 9px 18px; border: 1.5px solid #E2DFD8; border-radius: 8px; background: #fff; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; color: #4B5563; transition: all .15s; display: flex; align-items: center; gap: 7px; }
+.gpc-bank-tab:hover { border-color: #1C2B4A; color: #1C2B4A; }
+.gpc-bank-tab.active { color: #fff; border-color: transparent; }
+.gpc-bank-tab .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+/* Bank info box */
+.gpc-bank-box { background: #fff; border: 1px solid #E2DFD8; border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
+.gpc-bank-box-header { padding: 14px 20px; border-bottom: 1px solid #E2DFD8; display: flex; align-items: center; gap: 10px; }
+.gpc-bank-box-dot { width: 10px; height: 10px; border-radius: 50%; }
+.gpc-bank-box-name { font-weight: 700; font-size: 15px; color: #1A1A1A; }
+.gpc-bank-box-code { font-size: 12px; color: #9CA3AF; margin-left: 6px; }
+/* How it works */
+.gpc-steps { }
+.gpc-step { display: flex; align-items: flex-start; gap: 14px; padding: 14px 20px; border-bottom: 1px solid #E2DFD8; }
+.gpc-step:last-child { border-bottom: none; }
+.gpc-step-num { width: 26px; height: 26px; flex-shrink: 0; background: #EEF2FF; color: #4F46E5; border-radius: 50%; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.gpc-step-text { font-size: 13px; color: #4B5563; line-height: 1.5; }
+.gpc-step-text strong { color: #1A1A1A; }
+/* Drop zone */
+.gpc-drop { border: 2px dashed #C8C4BC; border-radius: 10px; padding: 36px 24px; text-align: center; cursor: pointer; background: #fff; transition: all .18s; margin-bottom: 14px; position: relative; }
+.gpc-drop:hover, .gpc-drop.over { border-color: #C8A84B; background: #FEFAEE; }
+.gpc-drop.has-file { border-color: #15803D; background: #F0FDF4; }
+.gpc-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.gpc-drop-icon { width: 44px; height: 44px; background: #EEF2FF; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 20px; }
+.gpc-drop-main { font-size: 14px; font-weight: 600; color: #1A1A1A; margin-bottom: 4px; }
+.gpc-drop-sub { font-size: 12px; color: #9CA3AF; }
+/* File previews */
+.gpc-chip { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #E2DFD8; border-radius: 6px; padding: 5px 10px; font-size: 11px; color: #4B5563; max-width: 200px; }
+.gpc-chip img { height: 28px; width: 20px; object-fit: cover; border-radius: 2px; }
+.gpc-chip-pdf { font-family: monospace; font-size: 9px; font-weight: 600; background: #FFF3CD; color: #856404; border-radius: 3px; padding: 1px 5px; }
+/* PDF banner */
+.gpc-pdf-banner { display: flex; align-items: flex-start; gap: 14px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; }
+/* Buttons */
+.gpc-btn-primary { display: inline-flex; align-items: center; gap: 8px; background: #1C2B4A; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 700; font-size: 13px; padding: 11px 24px; transition: background .15s, transform .1s, box-shadow .15s; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.gpc-btn-primary:hover:not(:disabled) { background: #2E4470; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(28,43,74,.25); }
+.gpc-btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+.gpc-btn-secondary { display: inline-flex; align-items: center; gap: 7px; background: #fff; color: #1A1A1A; border: 1px solid #C8C4BC; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 600; font-size: 13px; padding: 11px 20px; transition: background .15s, border-color .15s; text-decoration: none; }
+.gpc-btn-secondary:hover { background: #F5F4F0; border-color: #9CA3AF; }
+.gpc-btn-download { background: #F0FDF4; color: #15803D; border-color: #BBF7D0; }
+.gpc-btn-download:hover { background: #DCFCE7; border-color: #86EFAC; }
+.gpc-btn-pdf { background: #FFFBEB; color: #B45309; border-color: #FDE68A; }
+.gpc-btn-pdf:hover { background: #FEF3C7; }
+/* Log */
+.gpc-log { background: #FAFAF9; border: 1px solid #E2DFD8; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-family: 'DM Mono','Courier New',monospace; font-size: 11px; max-height: 150px; overflow-y: auto; }
+.gpc-log-line { margin-bottom: 3px; line-height: 1.6; display: flex; gap: 10px; }
+.gpc-log-ts { color: #9CA3AF; flex-shrink: 0; }
+/* Validation card */
+.gpc-card { background: #fff; border: 1px solid #E2DFD8; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+.gpc-card-hdr { padding: 10px 18px; border-bottom: 1px solid #E2DFD8; font-size: 11px; font-weight: 700; color: #4B5563; text-transform: uppercase; letter-spacing: .1em; background: #FAFAF9; display: flex; align-items: center; gap: 8px; }
+.gpc-vrow { display: grid; grid-template-columns: 1fr 1fr 1fr 36px; gap: 10px; padding: 9px 18px; font-size: 12px; border-bottom: 1px solid #E2DFD8; align-items: center; }
+.gpc-vrow:last-child { border-bottom: none; }
+.gpc-vlabel { color: #4B5563; font-weight: 500; }
+.gpc-vnum { text-align: right; font-family: monospace; font-size: 11.5px; font-weight: 600; }
+.gpc-vexp { text-align: right; font-family: monospace; font-size: 11px; color: #9CA3AF; }
+.gpc-ok { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 50%; color: #15803D; font-size: 11px; }
+.gpc-er { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 50%; color: #B91C1C; font-size: 11px; }
+/* Transactions */
+.gpc-tx-hdr { display: grid; grid-template-columns: 72px 90px 1fr 1fr 130px; gap: 10px; padding: 8px 18px; font-size: 10px; font-weight: 700; color: #9CA3AF; letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid #E2DFD8; position: sticky; top: 0; background: #FAFAF9; }
+.gpc-tx-row { display: grid; grid-template-columns: 72px 90px 1fr 1fr 130px; gap: 10px; padding: 8px 18px; font-size: 11.5px; border-bottom: 1px solid #E2DFD8; align-items: center; transition: background .1s; }
+.gpc-tx-row:hover { background: #F9FAFB; }
+.gpc-tx-row:last-child { border-bottom: none; }
+.gpc-mn { font-family: monospace; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gpc-stats { padding: 10px 18px; display: flex; gap: 20px; font-size: 11px; flex-wrap: wrap; color: #4B5563; border-top: 1px solid #E2DFD8; }
+/* Security note */
+.gpc-security { display: flex; align-items: flex-start; gap: 12px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 10px; padding: 14px 18px; margin-top: 20px; }
+.gpc-security-text { font-size: 12px; color: #166534; line-height: 1.5; }
+.gpc-security-title { font-weight: 700; margin-bottom: 2px; }
+/* Footer */
+.gpc-footer { padding: 20px 32px; border-top: 1px solid #E2DFD8; font-size: 11px; color: #9CA3AF; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #fff; }
+.gpc-spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px; }
+.gpc-back { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); color: rgba(255,255,255,.8); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; margin-bottom: 0; transition: background .15s; }
+.gpc-back:hover { background: rgba(255,255,255,.18); }
+@media (max-width: 640px) { .gpc-main { padding: 20px 16px; } .gpc-hero { padding: 20px 16px; } .gpc-tx-hdr, .gpc-tx-row { grid-template-columns: 70px 1fr 100px; } .gpc-tx-hdr span:nth-child(2), .gpc-tx-row span:nth-child(2), .gpc-tx-hdr span:nth-child(4), .gpc-tx-row span:nth-child(4) { display: none; } }
+</style>
 
-      <!-- Jak to funguje -->
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
-        <div style="background:var(--cream);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px;text-align:center">
-          <div style="font-size:20px;margin-bottom:6px">📸</div>
-          <div style="font-weight:700;font-size:12px;margin-bottom:3px">1. Nahrajte výpis</div>
-          <div style="font-size:11px;color:var(--text-muted)">JPG, PNG nebo PDF z ČSOB internetového bankovnictví</div>
-        </div>
-        <div style="background:var(--cream);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px;text-align:center">
-          <div style="font-size:20px;margin-bottom:6px">⚡</div>
-          <div style="font-weight:700;font-size:12px;margin-bottom:3px">2. Klikněte Konvertovat</div>
-          <div style="font-size:11px;color:var(--text-muted)">AI přečte výpis a extrahuje všechny transakce</div>
-        </div>
-        <div style="background:var(--cream);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px;text-align:center">
-          <div style="font-size:20px;margin-bottom:6px">📥</div>
-          <div style="font-weight:700;font-size:12px;margin-bottom:3px">3. Stáhněte .gpc</div>
-          <div style="font-size:11px;color:var(--text-muted)">Importujte do Pohody, Money S3 nebo jiného softwaru</div>
-        </div>
-      </div>
+<div class="gpc-wrap">
+  <!-- Topbar -->
+  <div class="gpc-topbar">
+    <span class="gpc-topbar-logo">tvojepodnikani.cz</span>
+    <span class="gpc-topbar-sep">›</span>
+    <span class="gpc-topbar-tool">GPC Agent</span>
+    <button class="gpc-back" onclick="goHome()" style="margin-left:auto">← Zpět</button>
+  </div>
 
-      <!-- Upload -->
-      <div class="drop-zone" id="dzG" ondragover="gpcDragOver(event)" ondragleave="gpcDragLeave()" ondrop="gpcDrop(event)" style="margin-bottom:12px">
-        <input type="file" id="gpcFileInput" multiple accept="image/*,application/pdf" onchange="gpcHandleFiles(this.files)">
-        <div class="dz-icon" id="gpcDzIcon">📄</div>
-        <div class="dz-label" id="gpcDzLabel">Přetáhněte výpis nebo klikněte pro výběr</div>
-        <div class="dz-hint" id="gpcDzHint">JPG · PNG · PDF · více stránek najednou</div>
-      </div>
-
-      <!-- Náhled souborů -->
-      <div id="gpcPreviews" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
-
-      <!-- PDF merge banner -->
-      <div id="gpcPdfBanner" class="hidden" style="display:flex;align-items:flex-start;gap:14px;background:var(--warn-bg);border:1px solid #FDE68A;border-radius:var(--r);padding:14px 18px;margin-bottom:16px">
-        <div style="font-size:22px;flex-shrink:0;margin-top:1px">🗂️</div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:700;color:#92400E;margin-bottom:3px" id="gpcPdfBannerTitle">Sloučit obrázky do PDF</div>
-          <div style="font-size:12px;color:var(--warn)" id="gpcPdfBannerDesc">Pro správný název nejprve klikněte Konvertovat, pak stáhněte PDF.</div>
-        </div>
-        <div id="gpcPdfBannerBtn">
-          <button onclick="gpcBuildPdf()" style="padding:7px 14px;background:var(--warn-bg);color:var(--warn);border:1px solid #FDE68A;border-radius:var(--r-sm);cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;white-space:nowrap">⬇ Vytvořit PDF</button>
-        </div>
-      </div>
-
-      <!-- Akce -->
-      <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center">
-        <button id="gpcConvertBtn" onclick="gpcConvert()" disabled
-          style="display:inline-flex;align-items:center;gap:8px;background:#4F46E5;color:#fff;border:none;border-radius:var(--r-sm);cursor:pointer;font-family:inherit;font-weight:700;font-size:13px;padding:11px 24px;transition:background .15s;opacity:.4">
-          ⚡ Konvertovat → GPC
-        </button>
-        <div id="gpcDownloadBtns" style="display:flex;gap:8px;flex-wrap:wrap"></div>
-        <button id="gpcJsonBtn" onclick="gpcToggleJson()" class="hidden"
-          style="padding:9px 16px;background:transparent;color:var(--text-mid);border:1.5px solid var(--border);border-radius:var(--r-sm);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">
-          { } Raw JSON
-        </button>
-      </div>
-
-      <!-- Log -->
-      <div id="gpcLog" class="log hidden" style="margin-bottom:16px"></div>
-
-      <!-- Validace -->
-      <div id="gpcValidation" class="hidden">
-        <div class="card" style="margin-bottom:14px">
-          <div class="card-head"><span class="card-title">Kontrolní součty</span></div>
-          <div id="gpcValidationContent"></div>
-          <div id="gpcStats" style="padding:10px 18px;font-size:12px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;border-top:1px solid var(--border)"></div>
-        </div>
-      </div>
-
-      <!-- Transakce -->
-      <div id="gpcTransactions" class="hidden">
-        <div class="card" style="margin-bottom:14px">
-          <div class="card-head">
-            <span class="card-title" id="gpcTxTitle">Transakce</span>
-            <span id="gpcTxCount" style="font-size:11px;color:var(--text-muted)"></span>
-          </div>
-          <div style="overflow-x:auto">
-            <div id="gpcTxContent" style="max-height:380px;overflow-y:auto"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Raw JSON -->
-      <div id="gpcJsonSection" class="hidden">
-        <div class="card">
-          <div class="card-head"><span class="card-title">{ } Raw JSON z AI</span></div>
-          <pre id="gpcJsonContent" style="font-family:var(--mono);font-size:11px;color:var(--text-mid);padding:14px 18px;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all;line-height:1.8;background:#FAFAF8"></pre>
-        </div>
-      </div>
-
+  <!-- Hero -->
+  <div class="gpc-hero">
+    <div class="gpc-hero-title">Bankovní výpis → <span>GPC</span></div>
+    <p class="gpc-hero-sub">
+      Nahrajte výpis z ČSOB, KB, České spořitelny, Raiffeisenbank nebo Moneta.
+      AI automaticky extrahuje transakce a vytvoří soubor <strong>.gpc</strong> pro import do Pohody, Money S3 nebo jiného účetního softwaru.
+    </p>
+    <div class="gpc-bank-chips">
+      <span class="gpc-bank-chip">ČSOB</span>
+      <span class="gpc-bank-chip">KB</span>
+      <span class="gpc-bank-chip">ČS</span>
+      <span class="gpc-bank-chip">RB</span>
+      <span class="gpc-bank-chip">Moneta</span>
     </div>
   </div>
 
-  <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:8px">
-    GPC Agent v2 · ABO/GPC specifikace ČNB · Claude Sonnet · kódování Windows-1250 · Pohoda · Money S3
+  <!-- Main -->
+  <div class="gpc-main">
+
+    <!-- Bank selector -->
+    <div class="gpc-section-label">Vyberte banku</div>
+    <div class="gpc-bank-tabs" style="margin-bottom:16px">
+      <button onclick="gpcSelectBank('csob')" id="gpcTab_csob" class="gpc-bank-tab active" style="background:#003DA5;color:#fff;border-color:#003DA5">
+        <span class="dot" style="background:#fff"></span>ČSOB
+      </button>
+      <button onclick="gpcSelectBank('kb')" id="gpcTab_kb" class="gpc-bank-tab">
+        <span class="dot" style="background:#D52B1E"></span>KB
+      </button>
+      <button onclick="gpcSelectBank('cs')" id="gpcTab_cs" class="gpc-bank-tab">
+        <span class="dot" style="background:#00843D"></span>ČS
+      </button>
+      <button onclick="gpcSelectBank('rb')" id="gpcTab_rb" class="gpc-bank-tab">
+        <span class="dot" style="background:#FFCC00"></span>RB
+      </button>
+      <button onclick="gpcSelectBank('moneta')" id="gpcTab_moneta" class="gpc-bank-tab">
+        <span class="dot" style="background:#E2001A"></span>Moneta
+      </button>
+    </div>
+
+    <!-- Bank info box -->
+    <div class="gpc-bank-box" id="gpcBankBox">
+      <div class="gpc-bank-box-header">
+        <span class="gpc-bank-box-dot" id="gpcBankDot" style="background:#003DA5"></span>
+        <span class="gpc-bank-box-name" id="gpcBankName">Československá obchodní banka</span>
+        <span class="gpc-bank-box-code" id="gpcBankCode">kód 0300</span>
+      </div>
+      <!-- How it works -->
+      <div class="gpc-steps">
+        <div class="gpc-step"><div class="gpc-step-num">1</div><div class="gpc-step-text"><strong>Nahrajte výpis</strong> — JPG, PNG nebo PDF z internetového bankovnictví (i více souborů / stránek najednou)</div></div>
+        <div class="gpc-step"><div class="gpc-step-num">2</div><div class="gpc-step-text"><strong>Klikněte Konvertovat</strong> — AI přečte výpis a extrahuje všechny transakce</div></div>
+        <div class="gpc-step"><div class="gpc-step-num">3</div><div class="gpc-step-text"><strong>Stáhněte .gpc soubor</strong> — Importujte do Pohody, Money S3 nebo jiného účetního softwaru</div></div>
+      </div>
+    </div>
+
+    <!-- Upload -->
+    <div class="gpc-section-label">Výpis k převodu</div>
+    <div class="gpc-drop" id="dzGpc" ondragover="gpcDragOver(event)" ondragleave="gpcDragLeave()" ondrop="gpcDrop(event)">
+      <input type="file" id="gpcFileInput" multiple accept="image/*,application/pdf" onchange="gpcHandleFiles(this.files)">
+      <div class="gpc-drop-icon">📄</div>
+      <div class="gpc-drop-main" id="gpcDzMain">Přetáhněte soubory nebo klikněte pro výběr</div>
+      <div class="gpc-drop-sub" id="gpcDzSub">JPG · PNG · PDF · více stránek najednou</div>
+    </div>
+
+    <!-- Previews -->
+    <div id="gpcPreviews" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
+
+    <!-- PDF merge banner -->
+    <div id="gpcPdfBanner" style="display:none" class="gpc-pdf-banner">
+      <div style="font-size:22px;flex-shrink:0;margin-top:1px">🗂️</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700;color:#92400E;margin-bottom:3px" id="gpcPdfBannerTitle">Sloučit obrázky do PDF</div>
+        <div style="font-size:12px;color:#B45309" id="gpcPdfBannerDesc">Pro správný název nejprve klikněte Konvertovat, pak teprve stáhněte PDF.</div>
+      </div>
+      <div id="gpcPdfBannerBtn">
+        <button onclick="gpcBuildPdf()" class="gpc-btn-secondary gpc-btn-pdf" style="flex-shrink:0;white-space:nowrap">⬇ Vytvořit PDF</button>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;align-items:center">
+      <button id="gpcConvertBtn" onclick="gpcConvert()" disabled class="gpc-btn-primary">
+        ⚡ Konvertovat → GPC
+      </button>
+      <div id="gpcDownloadBtns" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      <button id="gpcJsonBtn" onclick="gpcToggleJson()" style="display:none" class="gpc-btn-secondary">{ } Raw JSON</button>
+    </div>
+
+    <!-- Log -->
+    <div id="gpcLog" style="display:none" class="gpc-log"></div>
+
+    <!-- Validation -->
+    <div id="gpcValidation" style="display:none">
+      <div class="gpc-card">
+        <div class="gpc-card-hdr">✓ Kontrolní součty</div>
+        <div id="gpcValidationContent"></div>
+        <div id="gpcStats" class="gpc-stats"></div>
+      </div>
+    </div>
+
+    <!-- Transactions -->
+    <div id="gpcTransactions" style="display:none">
+      <div class="gpc-card">
+        <div class="gpc-card-hdr" id="gpcTxTitle">Transakce</div>
+        <div style="overflow-x:auto">
+          <div id="gpcTxContent" style="max-height:360px;overflow-y:auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Raw JSON -->
+    <div id="gpcJsonSection" style="display:none">
+      <div class="gpc-card">
+        <div class="gpc-card-hdr">{ } Raw JSON z AI</div>
+        <pre id="gpcJsonContent" style="font-family:monospace;font-size:11px;color:#4B5563;padding:14px 18px;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all;line-height:1.8;background:#FAFAF9"></pre>
+      </div>
+    </div>
+
+    <!-- Security note -->
+    <div class="gpc-security">
+      <div style="font-size:20px;flex-shrink:0">🔒</div>
+      <div class="gpc-security-text">
+        <div class="gpc-security-title">Bezpečnost a ochrana vašich dat</div>
+        Výpis se odesílá přímo z vašeho prohlížeče na Anthropic API přes šifrované HTTPS — žádný mezičlánek ani třetí strana data nevidí. Díky placené verzi Anthropic API nejsou vaše data používána k trénování AI modelů.
+      </div>
+    </div>
+
+  </div><!-- /gpc-main -->
+
+  <div class="gpc-footer">
+    <span>GPC Agent v3 · ABO/GPC specifikace ČNB · Claude Sonnet · ČSOB · KB · ČS · RB · Moneta</span>
+    <span>kódování Windows-1250 · Pohoda · Money S3</span>
   </div>
-</div>
+
+</div><!-- /gpc-wrap -->
+</div><!-- /pageG -->
+
 </div>
 </body>
 </html>
