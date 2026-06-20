@@ -401,7 +401,7 @@ footer a:hover { color: var(--navy); }
 <body>
 
 <!-- PIN OVERLAY -->
-<div id="pinOverlay">
+<div id="pinOverlay" style="display:none">
   <div class="pin-card">
     <div class="pin-logo">tp</div>
     <div class="pin-title">DPH Kontrola</div>
@@ -872,13 +872,18 @@ async function checkPin(){
   }
 }
 
-(async function initPin(){
-  if(sessionStorage.getItem('dph_auth')==='1' || PIN_HASH==='NAHRADIT'){
-    document.getElementById('pinOverlay').style.display='none';
-    return;
+document.addEventListener('DOMContentLoaded', async function(){
+  loadConfig();
+  const overlay = document.getElementById('pinOverlay');
+  if(PIN_HASH === 'NAHRADIT' || sessionStorage.getItem('dph_auth')==='1'){
+    // PIN není nastaven nebo už přihlášen — skrýt overlay
+    overlay.style.display = 'none';
+  } else {
+    // PIN je nastaven — zobrazit overlay
+    overlay.style.display = 'flex';
+    setTimeout(()=>document.getElementById('pinInput')?.focus(), 100);
   }
-  setTimeout(()=>document.getElementById('pinInput')?.focus(),100);
-})();
+});
 
 // ════════════════════════════════════════════════════════════════
 // ADMIN MODAL
@@ -1403,7 +1408,7 @@ function parseXlsxToRows(wb){
 // HLAVNÍ ANALÝZA
 // ════════════════════════════════════════════════════════════════
 const fmt    = n => n.toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2});
-const fmtDiff= n => { const s=n>=0?'+':''; return s+fmt(n); };
+// fmtDiff defined above
 
 function runAnalysis(flow){
   const s = state[flow||'a'];
