@@ -743,20 +743,23 @@ async function spLoadHistory(){
 
     logTo('histLog',`Nalezeno ${allFiles.length} Podklady_DPH souborů v agendě. Filtruji podle roku...`,'info');
 
-    // Debug — zobraz první 3 URL pro diagnostiku
-    allFiles.slice(0,3).forEach(f=>logTo('histLog',`  URL vzor: ...${decodeURIComponent(f.webUrl||'').split('/').slice(-4).join('/')}`))
+    // Filtrovat podle roku z NÁZVU SOUBORU (spolehlivější než URL)
+    // Název: Podklady_DPH_seskupené_-2026-05-25-1642.xlsx → rok = 2026
+    const getFileYear = f => {
+      const m = f.name.match(/-(\d{4})-\d{2}-\d{2}-/);
+      return m ? m[1] : null;
+    };
 
-    // Filtrovat podle roku — rok může být součástí názvu složky (042026, 2026, 26)
-    const filtered = allFiles.filter(f=>{
-      const path = decodeURIComponent((f.webUrl||f.parentReference?.path||'').toLowerCase());
-      // Hledat rok jako: /2026/, 042026, 2026xx, nebo jen 2026 kdekoliv
-      return path.includes(rok) || path.includes(rok.substring(2));
+    // Deduplikovat podle item ID
+    const seenIds = new Set();
+    const uniqueFiles = allFiles.filter(f => {
+      if(seenIds.has(f.id)) return false;
+      seenIds.add(f.id);
+      return true;
     });
 
-    const filteredPrev = allFiles.filter(f=>{
-      const path = decodeURIComponent((f.webUrl||f.parentReference?.path||'').toLowerCase());
-      return path.includes(prevRok) || path.includes(prevRok.substring(2));
-    });
+    const filtered     = uniqueFiles.filter(f => getFileYear(f) === rok);
+    const filteredPrev = uniqueFiles.filter(f => getFileYear(f) === prevRok);
 
     const toLoad = [...filteredPrev, ...filtered];
     logTo('histLog',`Filtrovano: ${filtered.length} souborů rok ${rok} + ${filteredPrev.length} rok ${prevRok} = celkem ${toLoad.length}. Stahuji...`,'info');
