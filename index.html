@@ -249,8 +249,21 @@ tr.tr-ds td{background:#fffbf0}
       <div class="grid3">
         <div class="field">
           <label>Rok DPH</label>
-          <select id="cfgRok" oninput="saveConfig()">
-            <option>2026</option><option>2025</option><option>2024</option>
+          <select id="cfgRok" oninput="saveConfig();updateRokMode()">
+            <option>2026</option><option>2025</option><option>2024</option><option>2023</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Režim načítání</label>
+          <select id="cfgRokMode" oninput="saveConfig();updateRokMode()">
+            <option value="single">Aktuální rok (průběžná kontrola)</option>
+            <option value="full">Celý rok — roční uzávěrka</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Načíst také rok</label>
+          <select id="cfgRokPrev" oninput="saveConfig()" style="opacity:.4" disabled>
+            <option>2025</option><option>2024</option><option>2023</option><option>2022</option>
           </select>
         </div>
         <div class="field">
@@ -294,6 +307,7 @@ tr.tr-ds td{background:#fffbf0}
     </div>
     <div class="card-body">
       <div id="histLog" class="log hidden"></div>
+      <div id="modeInfoBox" class="alert info" style="margin-top:10px;display:none"></div>
       <div id="histList" class="file-list" style="margin-top:10px"></div>
     </div>
   </div>
@@ -705,28 +719,50 @@ async function getItemByPath(path){
   } catch(e){ return null; }
 }
 
+function updateRokMode(){
+  const mode = document.getElementById('cfgRokMode')?.value||'single';
+  const prevSel = document.getElementById('cfgRokPrev');
+  const rok = cfg('cfgRok');
+  if(mode==='full'){
+    prevSel.disabled = false;
+    prevSel.style.opacity = '1';
+    // Nastavit prevRok automaticky na rok-1
+    prevSel.value = String(parseInt(rok)-1);
+  } else {
+    prevSel.disabled = true;
+    prevSel.style.opacity = '.4';
+  }
+}
+
 // ════════════════════════════════════════════════════════════════
 // NAČTENÍ HISTORIE ZE SP
 // ════════════════════════════════════════════════════════════════
 async function spLoadHistory(){
   if(!selectedAgenda){ alert('Nejdřív vyberte agendu klienta.'); return; }
 
-  const rok   = cfg('cfgRok');
-  const prevRok = String(parseInt(rok)-1);
+  const rok     = cfg('cfgRok');
+  const mode    = document.getElementById('cfgRokMode')?.value||'single';
+  const rokPrev = document.getElementById('cfgRokPrev')?.value||String(parseInt(rok)-1);
+
+  // Roky ke načtení
+  const rokyKNacteni = mode==='full'
+    ? [rokPrev, rok]           // Roční uzávěrka: celý zvolený rok (+ rok předchozí pro kontext)
+    : [String(parseInt(rok)-1), rok]; // Průběžná: aktuální rok + předchozí rok
 
   clearLog('histLog');
-  logTo('histLog',`Hledám DPH soubory: ${selectedAgenda.name} / ${rok}...`,'info');
   histFiles=[];
   renderHistList();
 
+  const modeLabel = mode==='full'
+    ? `ROČNÍ UZÁVĚRKA ${rokPrev} — načítám všechna DPH za rok ${rokPrev}`
+    : `Průběžná kontrola ${rok} — načítám historii`;
+  logTo('histLog', modeLabel, 'info');
+  logTo('histLog',`Hledám: ${selectedAgenda.name} / roky: ${rokyKNacteni.join(', ')}...`,'info');
+
   try{
     const t = await getToken();
-
-    // Přímé hledání XLSX souborů pojmenovaných "Podklady_DPH*" uvnitř složky agenty
-    // Použijeme search endpoint na konkrétní složku agenty (ne celý drive)
     logTo('histLog',`Prohledávám složku agenty přímo na SP...`,'info');
 
-    // Nejdřív najít item ID složky agenty
     const agendaPath = `tpCloud/Účetní agendy/${selectedAgenda.name}`;
     const agendaFolder = await graphGet(`/drives/${DRIVE_ID}/root:/${encodeURIComponentPath(agendaPath)}?$select=id,name,webUrl`);
     logTo('histLog',`Složka nalezena: ${agendaFolder.name} (ID: ${agendaFolder.id})`, 'ok');
@@ -743,8 +779,7 @@ async function spLoadHistory(){
 
     logTo('histLog',`Nalezeno ${allFiles.length} Podklady_DPH souborů v agendě. Filtruji podle roku...`,'info');
 
-    // Filtrovat podle roku z NÁZVU SOUBORU (spolehlivější než URL)
-    // Název: Podklady_DPH_seskupené_-2026-05-25-1642.xlsx → rok = 2026
+    // Filtrovat podle roku z NÁZVU SOUBORU — jen roky které chceme načíst
     const getFileYear = f => {
       const m = f.name.match(/-(\d{4})-\d{2}-\d{2}-/);
       return m ? m[1] : null;
@@ -758,11 +793,9 @@ async function spLoadHistory(){
       return true;
     });
 
-    const filtered     = uniqueFiles.filter(f => getFileYear(f) === rok);
-    const filteredPrev = uniqueFiles.filter(f => getFileYear(f) === prevRok);
-
-    const toLoad = [...filteredPrev, ...filtered];
-    logTo('histLog',`Filtrovano: ${filtered.length} souborů rok ${rok} + ${filteredPrev.length} rok ${prevRok} = celkem ${toLoad.length}. Stahuji...`,'info');
+    // Filtrovat jen roky které chceme
+    const toLoad = uniqueFiles.filter(f => rokyKNacteni.includes(getFileYear(f)));
+    logTo('histLog',`Filtrovano: ${toLoad.length} souborů pro roky ${rokyKNacteni.join(', ')}. Stahuji...`,'info');
 
     if(toLoad.length === 0){
       logTo('histLog',`Žádné soubory nenalezeny — zkuste obnovit nebo nahrajte ručně.`,'warn');
@@ -772,11 +805,12 @@ async function spLoadHistory(){
       logTo('histLog',`↓ ${f.name}...`);
       try{
         const buf = await graphGetBinary(`/drives/${DRIVE_ID}/items/${f.id}/content`);
-        const wb  = XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+        const arr = new Uint8Array(buf);
+        const wb  = XLSX.read(arr,{type:'array',cellDates:true});
         const rows = parseXlsx(wb);
         if(rows.length>0){
           const pd = extractPrintDate(f.name, f.lastModifiedDateTime);
-          histFiles.push({name:f.name,itemId:f.id,webUrl:f.webUrl,printDate:pd,rows});
+          histFiles.push({name:f.name,itemId:f.id,webUrl:f.webUrl,printDate:pd,rows,_rawData:arr});
           logTo('histLog',`  ✓ ${rows.length} dokladů`,'ok');
         } else {
           logTo('histLog',`  ⚠ prázdný nebo neparsovatelný`,'warn');
@@ -788,6 +822,18 @@ async function spLoadHistory(){
 
     histFiles.sort((a,b)=>a.printDate.localeCompare(b.printDate));
     renderHistList();
+
+    // Zobrazit info box co nahrát jako aktuální soubor
+    const infoBox = document.getElementById('modeInfoBox');
+    const mode2 = document.getElementById('cfgRokMode')?.value||'single';
+    if(mode2==='full'){
+      infoBox.style.display='block';
+      infoBox.innerHTML=`<b>Roční uzávěrka ${rokPrev}</b> — nyní nahrajte <b>sumární Podklady DPH za celý rok ${rokPrev}</b> (rozsah 1.1.${rokPrev}–31.12.${rokPrev}). Aplikace porovná každý doklad z tohoto souboru se všemi načtenými měsíčními DPH přiznáními.`;
+    } else {
+      infoBox.style.display='block';
+      infoBox.innerHTML=`<b>Průběžná kontrola ${rok}</b> — nahrajte <b>Podklady DPH od začátku roku ${rok}</b> (rozsah 1.1.${rok} – dnes). Historické měsíce budou porovnány se uzavřenými DPH přiznáními.`;
+    }
+
     logTo('histLog',`Hotovo — ${histFiles.length} historických souborů načteno.`,'ok');
     document.getElementById('step3').classList.add('done');
 
@@ -831,10 +877,11 @@ async function selectSpCurrent(itemId, name, lastMod, webUrlEnc){
   document.getElementById('spSearchResults').innerHTML='<div style="font-size:12px;padding:6px"><span class="spin"></span>Stahuju soubor ze SharePointu...</div>';
   try{
     const buf = await graphGetBinary(`/drives/${DRIVE_ID}/items/${itemId}/content`);
-    const wb  = XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+    const arr = new Uint8Array(buf);
+    const wb  = XLSX.read(arr,{type:'array',cellDates:true});
     const rows = parseXlsx(wb);
     const pd = extractPrintDate(name, lastMod);
-    currentFile={name, itemId, printDate:pd, rows, webUrl:decodeURIComponent(webUrlEnc), local:false};
+    currentFile={name, itemId, printDate:pd, rows, _rawData:arr, webUrl:decodeURIComponent(webUrlEnc), local:false};
     document.getElementById('spSearchResults').innerHTML='';
     renderCurrentFile();
   } catch(e){
@@ -852,10 +899,11 @@ function doDrop(e){e.preventDefault();document.getElementById('dz').classList.re
 async function handleLocalFile(file){
   if(!file||!file.name.endsWith('.xlsx'))return;
   const buf = await file.arrayBuffer();
-  const wb  = XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+  const arr = new Uint8Array(buf);
+  const wb  = XLSX.read(arr,{type:'array',cellDates:true});
   const rows = parseXlsx(wb);
   const pd = extractPrintDate(file.name,'');
-  currentFile={name:file.name,itemId:null,printDate:pd,rows,webUrl:null,local:true};
+  currentFile={name:file.name,itemId:null,printDate:pd,rows,_rawData:arr,webUrl:null,local:true};
   document.getElementById('dz').classList.add('has-file');
   renderCurrentFile();
 }
@@ -953,131 +1001,373 @@ function removeHist(i){histFiles.splice(i,1);renderHistList();}
 function removeCurrent(){currentFile=null;document.getElementById('currentFileDisplay').innerHTML='';document.getElementById('dz').classList.remove('has-file');document.getElementById('btnRunAnalysis').disabled=true;}
 
 // ════════════════════════════════════════════════════════════════
-// ANALÝZA DUPLICIT
 // ════════════════════════════════════════════════════════════════
+// PARSOVÁNÍ XLSX — doklady s interním číslem
+// ════════════════════════════════════════════════════════════════
+const MODS = new Set(['PHL','FAP','ODP','VPD','INT','FV','ZAL','BUP','PKP','DOB','POK','PPD']);
+const TOL  = 0.05;
+
+function parseXlsxToRows(wb){
+  // Vrací pole dokladových řádků: [{mes,rok,modul,ic,radky,sazba,zaklad,dph,firma}]
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+  let hdrIdx = -1;
+  for(let i=0;i<raw.length;i++){
+    if(raw[i].some(c=>String(c)==='Modul')){hdrIdx=i;break;}
+  }
+  if(hdrIdx<0) return [];
+
+  const hdr = raw[hdrIdx];
+  const x = {};
+  hdr.forEach((c,i)=>{
+    const s=String(c);
+    if(s==='Modul') x.m=i;
+    if(s==='Datum zdaň. plnění') x.dz=i;
+    if(s==='Řádky DPH') x.rd=i;
+    if(s==='Hodnota DPH') x.sz=i;
+    if(s==='Základ [Kč]') x.zk=i;
+    if(s==='DPH [Kč]') x.dk=i;
+    if(s==='Interní číslo dokladu') x.ic=i;
+    if(s==='Firma') x.fi=i;
+    if(s==='Číslo došlé') x.cd=i;
+  });
+
+  const rows = [];
+  const pn = v => Math.round((parseFloat(String(v||'0').replace(',','.'))||0)*100)/100;
+
+  for(let i=hdrIdx+1;i<raw.length;i++){
+    const row = raw[i];
+    const modul = String(row[x.m]||'').trim();
+    if(!MODS.has(modul)) continue;
+
+    const datStr = String(row[x.dz]||'').trim();
+    if(!datStr.match(/\d{2}\.\d{2}\.\d{4}/)) continue;
+    const parts = datStr.split('.');
+    const mes = parseInt(parts[1]);
+    const rok = parseInt(parts[2].substring(0,4));
+
+    const radky  = String(row[x.rd]||'').trim();
+    const sazba  = Math.round((parseFloat(String(row[x.sz]||'0').replace(',','.'))||0)*10)/10;
+    const zaklad = pn(row[x.zk]);
+    const dph    = pn(row[x.dk]);
+    const ic     = String(row[x.ic]||'').trim();
+    const firma  = String(row[x.fi]||'').trim();
+    const cd     = String(row[x.cd]||'').trim();
+
+    if(!radky || !ic) continue;
+    rows.push({mes,rok,modul,ic,radky,sazba,zaklad,dph,firma,cd});
+  }
+  return rows;
+}
+
+// ════════════════════════════════════════════════════════════════
+// HLAVNÍ ANALÝZA
+// ════════════════════════════════════════════════════════════════
+const fmt    = n => n.toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtDiff= n => { const s=n>=0?'+':''; return s+fmt(n); };
+
 function runAnalysis(){
-  if(!currentFile)return;
-  const histIdx=new Map();
-  histFiles.forEach(p=>p.rows.forEach(r=>{if(!histIdx.has(r.intCislo))histIdx.set(r.intCislo,p.name);}));
-  const seen=new Map();
-  const enriched=currentFile.rows.map(r=>{
-    let status='ok',dupIn=null;
-    if(histIdx.has(r.intCislo)){status='dc';dupIn=histIdx.get(r.intCislo);}
-    const fk=r.intCislo+'|'+r.radkyDph+'|'+r.sazba;
-    if(seen.has(fk)){status='ds';dupIn='aktuální období';}
-    seen.set(fk,true);
-    return{...r,status,dupIn};
+  if(!currentFile) return;
+
+  // Parsovat aktuální soubor (od začátku roku)
+  const wb = XLSX.read(currentFile._rawData, {type:'array', cellDates:true});
+  const curRows = parseXlsxToRows(wb);
+
+  // Parsovat všechny historické soubory
+  const histRows = []; // [{...row, _srcFile}]
+  histFiles.forEach(hf=>{
+    const hwb = XLSX.read(hf._rawData, {type:'array', cellDates:true});
+    const hfRows = parseXlsxToRows(hwb);
+    hfRows.forEach(r=>histRows.push({...r, _srcFile:hf.name, _srcDate:hf.printDate}));
   });
-  const total=enriched.length,ok=enriched.filter(x=>x.status==='ok').length;
-  const dc=enriched.filter(x=>x.status==='dc').length;
-  const ds=enriched.filter(x=>x.status==='ds').length;
-  const dphSum=computeDph(enriched.filter(x=>x.status==='ok'));
-  analysisResult={enriched,total,ok,dc,ds,dphSum};
+
+  // Index historických dokladů: ic+radky+sazba -> histRow
+  const histIdx = new Map();
+  histRows.forEach(r=>{
+    const k = `${r.ic}|${r.radky}|${r.sazba}`;
+    if(!histIdx.has(k)) histIdx.set(k, r);
+  });
+
+  // Index aktuálních dokladů
+  const curIdx = new Map();
+  curRows.forEach(r=>{
+    const k = `${r.ic}|${r.radky}|${r.sazba}`;
+    curIdx.set(k, r);
+  });
+
+  // Seskupit aktuální doklady po měsících
+  const monthMap = {};
+  curRows.forEach(r=>{
+    const mk = `${r.mes}|${r.rok}`;
+    if(!monthMap[mk]) monthMap[mk]={mes:r.mes,rok:r.rok,docs:[]};
+    monthMap[mk].docs.push(r);
+  });
+
+  // Pro každý měsíc provést analýzu
+  const monthResults = {};
+  Object.entries(monthMap).forEach(([mk,m])=>{
+    // Najít historický soubor pro tento měsíc
+    const histForMonth = histRows.filter(r=>`${r.mes}|${r.rok}`===mk);
+    const histSrcFiles = [...new Set(histForMonth.map(r=>r._srcFile))];
+    const noHist = histForMonth.length === 0;
+
+    // Analýza dokladů
+    const docLines = [];
+    let hasError = false;
+    let hasNew = false;
+
+    // Aktuální doklady — porovnat s historií
+    const seenIcs = new Set();
+    m.docs.forEach(cur=>{
+      const k = `${cur.ic}|${cur.radky}|${cur.sazba}`;
+      seenIcs.add(cur.ic);
+      const hist = histIdx.get(k);
+
+      let status, diffZ=0, diffD=0;
+      if(noHist){
+        status = 'new'; // Nové období, bez historie
+        hasNew = true;
+      } else if(!hist){
+        status = 'added'; // V aktuálním ale ne v historii
+        hasError = true;
+        diffZ = cur.zaklad;
+        diffD = cur.dph;
+      } else {
+        diffZ = Math.round((cur.zaklad - hist.zaklad)*100)/100;
+        diffD = Math.round((cur.dph    - hist.dph)*100)/100;
+        if(Math.abs(diffZ)<=TOL && Math.abs(diffD)<=TOL){
+          status = 'ok';
+        } else {
+          status = 'diff';
+          hasError = true;
+        }
+      }
+      docLines.push({...cur, status, diffZ, diffD,
+        histZ:hist?.zaklad??null, histD:hist?.dph??null,
+        histFile:hist?._srcFile||null});
+    });
+
+    // Historické doklady které chybí v aktuálním
+    const missingDocs = [];
+    if(!noHist){
+      histForMonth.forEach(h=>{
+        if(!seenIcs.has(h.ic)){
+          // Zkontrolovat jestli tento IC vůbec není v curRows (ne jen v tomto měsíci)
+          if(!curIdx.has(`${h.ic}|${h.radky}|${h.sazba}`)){
+            missingDocs.push({...h, status:'missing'});
+            hasError = true;
+          }
+        }
+      });
+    }
+
+    // Součty pro tento měsíc (ze sumačního souboru = aktuální)
+    let odZ=0,odD=0,prZ=0,prD=0;
+    m.docs.forEach(r=>{
+      if(r.radky.match(/^0[12]/)){odZ+=r.zaklad;odD+=r.dph;}
+      else{prZ+=r.zaklad;prD+=r.dph;}
+    });
+    const odvod = Math.round((odD-prD)*100)/100;
+
+    monthResults[mk] = {
+      mes:m.mes, rok:m.rok,
+      docLines, missingDocs,
+      hasError, hasNew, noHist,
+      histSrcFiles,
+      odvod, odZ, odD, prZ, prD
+    };
+  });
+
+  analysisResult = {monthResults, curRows, histRows};
   renderAnalysis();
-  renderXml();
+  // XML pro poslední měsíc
+  const months = Object.values(monthResults).sort((a,b)=>(a.rok*100+a.mes)-(b.rok*100+b.mes));
+  if(months.length) renderXmlForMonth(months[months.length-1]);
 }
-
-function computeDph(rows){
-  const g={};
-  rows.forEach(r=>{
-    const k=r.radkyDph||'?';
-    if(!g[k])g[k]={radky:k,sazby:{}};
-    if(!g[k].sazby[r.sazba])g[k].sazby[r.sazba]={z:0,d:0};
-    g[k].sazby[r.sazba].z+=r.zaklad;g[k].sazby[r.sazba].d+=r.dph;
-  });
-  let oz=0,od=0,pz=0,pd=0;
-  Object.values(g).forEach(gr=>{
-    const usc=gr.radky.match(/^0[12]/);
-    Object.values(gr.sazby).forEach(v=>{if(usc){oz+=v.z;od+=v.d;}else{pz+=v.z;pd+=v.d;}});
-  });
-  return{g,oz,od,pz,pd,odvod:Math.round((od-pd)*100)/100};
-}
-
-const fmt=n=>n.toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 
 function renderAnalysis(){
-  const r=analysisResult;
-  document.getElementById('statsBar').innerHTML=`
-    <div class="stat ${r.ok===r.total?'ok':''}"><div class="sv">${r.total}</div><div class="sl">Dokladů celkem</div></div>
-    <div class="stat ok"><div class="sv">${r.ok}</div><div class="sl">V pořádku</div></div>
-    <div class="stat ${r.dc>0?'err':'ok'}"><div class="sv">${r.dc}</div><div class="sl">Duplicity hist.</div></div>
-    <div class="stat ${r.ds>0?'warn':'ok'}"><div class="sv">${r.ds}</div><div class="sl">Duplicity v období</div></div>`;
+  const r = analysisResult.monthResults;
+  const MESICE = ['','Leden','Únor','Březen','Duben','Květen','Červen','Červenec','Srpen','Září','Říjen','Listopad','Prosinec'];
+  const months = Object.values(r).sort((a,b)=>(a.rok*100+a.mes)-(b.rok*100+b.mes));
 
-  const tbody=document.getElementById('tAllBody');
-  tbody.innerHTML='';
-  r.enriched.forEach(row=>{
-    const tr=document.createElement('tr');
-    tr.className=row.status==='dc'?'tr-dc':row.status==='ds'?'tr-ds':'';
-    tr.innerHTML=`<td><span class="badge ${row.status}">${row.status==='ok'?'✓ OK':row.status==='dc'?'⚠ HIST':'⚠ SAME'}</span></td>
-      <td class="mono">${row.modul}</td><td class="mono">${row.intCislo}</td>
-      <td class="mono">${row.datZd}</td><td class="mono">${row.radkyDph}</td>
-      <td class="mono right">${row.sazba}%</td>
-      <td class="mono right">${fmt(row.zaklad)}</td><td class="mono right">${fmt(row.dph)}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${row.firma||'—'}</td>
-      <td class="mono muted">${row.cisloDosle||'—'}</td>
-      <td class="muted" style="font-size:10px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${row.status!=='ok'?'<b>DUP: '+row.dupIn+'</b>':currentFile.name}</td>`;
-    tbody.appendChild(tr);
+  const total    = months.length;
+  const okCount  = months.filter(m=>!m.hasError&&!m.noHist).length;
+  const errCount = months.filter(m=>m.hasError).length;
+  const newCount = months.filter(m=>m.noHist).length;
+
+  document.getElementById('statsBar').innerHTML=`
+    <div class="stat ${okCount===total?'ok':''}"><div class="sv">${total}</div><div class="sl">Měsíců celkem</div></div>
+    <div class="stat ok"><div class="sv">${okCount}</div><div class="sl">✓ Vše sedí</div></div>
+    <div class="stat ${errCount>0?'err':'ok'}"><div class="sv">${errCount}</div><div class="sl">✗ Rozdíly / chybí</div></div>
+    <div class="stat ${newCount>0?'warn':'ok'}"><div class="sv">${newCount}</div><div class="sl">Nová období</div></div>`;
+
+  // Přehled po měsících
+  let html = '';
+  months.forEach(m=>{
+    const sc = m.noHist?'var(--warn)':m.hasError?'var(--err)':'var(--ok)';
+    const sb = m.noHist?'var(--warn-bg)':m.hasError?'var(--err-bg)':'var(--ok-bg)';
+    const si = m.noHist?'★':m.hasError?'✗':'✓';
+    const oc = m.odvod>0?'var(--err)':'var(--ok)';
+    const errLines  = m.docLines.filter(l=>l.status==='diff'||l.status==='added');
+    const missDocs  = m.missingDocs;
+
+    html+=`<div style="border:1.5px solid ${sc};border-radius:var(--r);margin-bottom:10px;overflow:hidden">
+      <div style="padding:9px 14px;background:${sb};display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-weight:800;font-size:15px;color:${sc}">${si}</span>
+          <span style="font-weight:700;font-size:13px">${MESICE[m.mes]} ${m.rok}</span>
+          <span style="font-size:11px;color:var(--muted)">${m.noHist?'— nové období':m.histSrcFiles.join(', ')}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px">
+          ${errLines.length>0?`<span style="font-size:11px;color:var(--err);font-weight:700">⚠ ${errLines.length} rozdílů</span>`:''}
+          ${missDocs.length>0?`<span style="font-size:11px;color:var(--err);font-weight:700">✗ ${missDocs.length} chybějících</span>`:''}
+          <span style="font-weight:800;font-size:13px;color:${oc}">${m.odvod>0?'Odvod':'Vratka'}: ${fmt(Math.abs(m.odvod))} Kč</span>
+        </div>
+      </div>
+
+      <div style="padding:0;overflow-x:auto">
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          <thead><tr style="background:#f7f7f5">
+            <th style="padding:5px 9px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);white-space:nowrap">Interní č.</th>
+            <th style="padding:5px 9px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)">Modul</th>
+            <th style="padding:5px 9px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)">Řádky DPH</th>
+            <th style="padding:5px 9px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)">Sazba</th>
+            <th style="padding:5px 9px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)">Základ (aktuální)</th>
+            <th style="padding:5px 9px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)">DPH (aktuální)</th>
+            <th style="padding:5px 9px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)">Základ (hist.)</th>
+            <th style="padding:5px 9px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)">DPH (hist.)</th>
+            <th style="padding:5px 9px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)">Δ Základ</th>
+            <th style="padding:5px 9px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)">Δ DPH</th>
+            <th style="padding:5px 9px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)">Stav</th>
+          </tr></thead>
+          <tbody>
+          ${m.docLines.map(l=>{
+            const rc=l.status==='ok'||l.status==='new'?'':'background:#fff5f5';
+            const sc2=l.status==='ok'||l.status==='new'?'var(--muted)':'var(--err)';
+            const badge = l.status==='ok'?'<span class="badge ok">✓ OK</span>':
+                          l.status==='new'?'<span class="badge" style="background:#f0f0ea;color:var(--muted)">★ Nové</span>':
+                          l.status==='added'?'<span class="badge dc">+ Přidán</span>':
+                          '<span class="badge dc">✗ Rozdíl</span>';
+            return `<tr style="${rc}">
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);font-family:var(--mono);font-weight:600">${l.ic}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);font-family:var(--mono)">${l.modul}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);font-family:var(--mono)">${l.radky}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono)">${l.sazba}%</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono)">${fmt(l.zaklad)}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono)">${fmt(l.dph)}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);color:var(--muted)">${l.histZ!==null?fmt(l.histZ):'—'}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);color:var(--muted)">${l.histD!==null?fmt(l.histD):'—'}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);font-weight:700;color:${sc2}">${l.status==='ok'||l.status==='new'?'—':fmtDiff(l.diffZ)}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);font-weight:700;color:${sc2}">${l.status==='ok'||l.status==='new'?'—':fmtDiff(l.diffD)}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:center">${badge}</td>
+            </tr>`;
+          }).join('')}
+          ${m.missingDocs.map(l=>`<tr style="background:#fff0f5">
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);font-family:var(--mono);font-weight:600;color:var(--err)">${l.ic}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);font-family:var(--mono)">${l.modul}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);font-family:var(--mono)">${l.radky}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono)">${l.sazba}%</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);color:var(--muted)">—</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);color:var(--muted)">—</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono)">${fmt(l.zaklad)}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono)">${fmt(l.dph)}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);font-weight:700;color:var(--err)">—${fmt(l.zaklad)}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);font-weight:700;color:var(--err)">—${fmt(l.dph)}</td>
+              <td style="padding:4px 9px;border-bottom:1px solid var(--border);text-align:center"><span class="badge dc">✗ Chybí</span></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
   });
 
-  const dups=r.enriched.filter(x=>x.status!=='ok');
-  document.getElementById('dupContent').innerHTML=dups.length===0
-    ?'<div class="alert ok">✓ Žádné duplicity nalezeny.</div>'
-    :`<div class="alert err">Nalezeno ${dups.length} duplicit.</div>
-      <div class="tbl-wrap"><table><thead><tr><th>Typ</th><th>Modul</th><th>Interní č.</th><th>Datum ZD</th><th>Sazba</th><th class="right">Základ</th><th class="right">DPH</th><th>Firma</th><th>Duplicita v</th></tr></thead><tbody>
-      ${dups.map(row=>`<tr class="tr-${row.status}"><td><span class="badge ${row.status}">${row.status==='dc'?'Hist.':'Stejné'}</span></td>
-        <td class="mono">${row.modul}</td><td class="mono">${row.intCislo}</td><td class="mono">${row.datZd}</td>
-        <td class="mono">${row.sazba}%</td><td class="mono right">${fmt(row.zaklad)}</td><td class="mono right">${fmt(row.dph)}</td>
-        <td>${row.firma||'—'}</td><td><b>${row.dupIn}</b></td></tr>`).join('')}
-      </tbody></table></div>`;
+  document.getElementById('tAll').innerHTML = html || '<div class="alert info">Nahrajte soubor a spusťte analýzu.</div>';
+  document.getElementById('tDup').innerHTML = '<div class="alert info">Duplicity jsou zobrazeny přímo v přehledu měsíců jako "✗ Chybí" nebo "+ Přidán".</div>';
 
-  const s=r.dphSum;
-  document.getElementById('dphContent').innerHTML=`<div class="dph-grid">
-    <div class="dph-blk"><div class="dph-blk-h">Uskutečněná plnění (01–02)</div><table>
-    ${Object.values(s.g).filter(g=>g.radky.match(/^0[12]/)).map(g=>Object.entries(g.sazby).map(([sz,v])=>`<tr><td>${g.radky} – ${sz}%</td><td>${fmt(v.z)}</td><td>${fmt(v.d)}</td></tr>`).join('')).join('')}
-    <tr class="tot"><td><b>Celkem</b></td><td>${fmt(s.oz)}</td><td>${fmt(s.od)}</td></tr></table></div>
-    <div class="dph-blk"><div class="dph-blk-h">Přijatá plnění (40–41, 05–06)</div><table>
-    ${Object.values(s.g).filter(g=>!g.radky.match(/^0[12]/)).map(g=>Object.entries(g.sazby).map(([sz,v])=>`<tr><td>${g.radky} – ${sz}%</td><td>${fmt(v.z)}</td><td>${fmt(v.d)}</td></tr>`).join('')).join('')}
-    <tr class="tot"><td><b>Celkem</b></td><td>${fmt(s.pz)}</td><td>${fmt(s.pd)}</td></tr></table></div></div>
-    <div class="stat ${s.odvod>0?'err':'ok'}" style="max-width:270px;margin-top:6px">
-      <div class="sv">${fmt(Math.abs(s.odvod))} Kč</div>
-      <div class="sl">${s.odvod>0?'Vlastní daňová povinnost':'Nadměrný odpočet'}</div></div>`;
+  // Souhrn DPH tab
+  let dphHtml = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f2f2ee">
+      <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid var(--border)">Měsíc</th>
+      <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid var(--border)">Základ uск.</th>
+      <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid var(--border)">DPH uск.</th>
+      <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid var(--border)">Základ přij.</th>
+      <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid var(--border)">DPH přij.</th>
+      <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid var(--border)">Odvod / Vratka</th>
+      <th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid var(--border)">Stav</th>
+    </tr></thead><tbody>`;
+
+  let totOdZ=0,totOdD=0,totPrZ=0,totPrD=0;
+  months.forEach(m=>{
+    const oc=m.odvod>0?'var(--err)':'var(--ok)';
+    totOdZ+=m.odZ;totOdD+=m.odD;totPrZ+=m.prZ;totPrD+=m.prD;
+    const sb=m.noHist?'<span class="badge" style="background:#f0f0ea;color:var(--muted)">★ Nové</span>':
+             m.hasError?'<span class="badge dc">✗ Rozdíl</span>':'<span class="badge ok">✓ OK</span>';
+    dphHtml+=`<tr>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border);font-weight:600">${MESICE[m.mes]} ${m.rok}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono)">${fmt(m.odZ)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono)">${fmt(m.odD)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono)">${fmt(m.prZ)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono)">${fmt(m.prD)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);font-weight:700;color:${oc}">${m.odvod>0?'+':''}${fmt(m.odvod)} Kč</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:center">${sb}</td>
+    </tr>`;
+  });
+  const totOdvod=Math.round((totOdD-totPrD)*100)/100;
+  dphHtml+=`<tr style="background:#f7f7f5;font-weight:800">
+    <td style="padding:8px 10px;border-top:2px solid var(--border-s)">CELKEM YTD</td>
+    <td style="padding:8px 10px;border-top:2px solid var(--border-s);text-align:right;font-family:var(--mono)">${fmt(totOdZ)}</td>
+    <td style="padding:8px 10px;border-top:2px solid var(--border-s);text-align:right;font-family:var(--mono)">${fmt(totOdD)}</td>
+    <td style="padding:8px 10px;border-top:2px solid var(--border-s);text-align:right;font-family:var(--mono)">${fmt(totPrZ)}</td>
+    <td style="padding:8px 10px;border-top:2px solid var(--border-s);text-align:right;font-family:var(--mono)">${fmt(totPrD)}</td>
+    <td style="padding:8px 10px;border-top:2px solid var(--border-s);text-align:right;font-family:var(--mono);color:${totOdvod>0?'var(--err)':'var(--ok)'}">${fmt(totOdvod)} Kč</td>
+    <td style="padding:8px 10px;border-top:2px solid var(--border-s)"></td>
+  </tr></tbody></table>`;
+  document.getElementById('dphContent').innerHTML = dphHtml;
 }
 
-// ════════════════════════════════════════════════════════════════
-// XML GENEROVÁNÍ — pouze součty, žádná citlivá data
-// ════════════════════════════════════════════════════════════════
-// ════════════════════════════════════════════════════════════════
-// XML GENEROVÁNÍ — závazek (odvod) nebo pohledávka (vratka)
-// ════════════════════════════════════════════════════════════════
-function renderXml(){
-  const r=analysisResult;
-  document.getElementById('xmlWarnDiv').classList.toggle('hidden',r.dc===0&&r.ds===0);
-  const dates=currentFile.rows.map(x=>x.datZd).filter(Boolean).sort();
-  const lastDate=dates[dates.length-1]||new Date().toISOString().substring(0,10);
-  const perioda=lastDate.substring(0,7).replace('-','');
-  const odvod=r.dphSum.odvod; // kladné = platit, záporné = vratka
-  const absVal=Math.abs(odvod);
 
+
+function renderXmlForMonth(m){
+  if(!m) return;
+  const odvod = m.odvod;
+  const absVal = Math.abs(odvod);
+  // Datum = poslední den daného měsíce
+  const lastDay = new Date(m.rok, m.mes, 0);
+  const d = `${m.rok}-${String(m.mes).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+  const perioda = `${String(m.mes).padStart(2,'0')}${m.rok}`;
+  renderXmlCore(d, odvod, perioda);
+}
+
+function renderXml(){
+  // Volá se po runAnalysis — vybere poslední měsíc
+  if(!analysisResult?.monthResults) return;
+  const months = Object.values(analysisResult.monthResults)
+    .sort((a,b)=>(a.rok*100+a.mes)-(b.rok*100+b.mes));
+  if(months.length) renderXmlForMonth(months[months.length-1]);
+}
+
+function renderXmlCore(d, odvod, perioda){
   const isOdvod = odvod > 0;
-  // Typ badge
-  const badge=document.getElementById('xmlTypeBadge');
+  const absVal = Math.abs(odvod);
   const lbl=document.getElementById('xmlTypeLabel');
   const note=document.getElementById('xmlTypeNote');
   const card1=document.getElementById('xmlCard1Title');
+  document.getElementById('xmlWarnDiv').classList.add('hidden');
   if(isOdvod){
     lbl.textContent='📤 Vlastní daňová povinnost — ODVOD';
     lbl.style.color='var(--err)';
     note.textContent=`Generuje se ZÁVAZEK (${fmt(absVal)} Kč) + Interní doklad`;
     card1.textContent='Závazek — odvod DPH';
-    document.getElementById('xmlZ').textContent=genZavazek(lastDate,absVal,perioda);
+    document.getElementById('xmlZ').textContent=genZavazek(d,absVal,perioda);
   } else {
     lbl.textContent='📥 Nadměrný odpočet — VRATKA';
     lbl.style.color='var(--ok)';
     note.textContent=`Generuje se POHLEDÁVKA (${fmt(absVal)} Kč) + Interní doklad`;
     card1.textContent='Pohledávka — vratka DPH';
-    document.getElementById('xmlZ').textContent=genPohledavka(lastDate,absVal,perioda);
+    document.getElementById('xmlZ').textContent=genPohledavka(d,absVal,perioda);
   }
-  document.getElementById('xmlI').textContent=genInterni(lastDate,odvod,perioda);
+  document.getElementById('xmlI').textContent=genInterni(d,odvod,perioda);
 }
 
 // ZÁVAZEK — daňová povinnost (odvod > 0)
@@ -1385,7 +1675,8 @@ function renderCompletenessResults(results, month, year){
 function downloadXml(type){
   const el=document.getElementById(type==='z'?'xmlZ':'xmlI');
   const p=currentFile?.printDate?.substring(0,7).replace('-','')||'';
-  const isOdvod = analysisResult?.dphSum?.odvod > 0;
+  // Zjistit typ ze zobrazené hlavičky (spolehlivější)
+  const isOdvod = document.getElementById('xmlCard1Title')?.textContent?.includes('Záv') ?? true;
   const fn=type==='z'
     ?(isOdvod?`zavazek_DPH_${p}.xml`:`pohledavka_DPH_${p}.xml`)
     :`interni_DPH_${p}.xml`;
