@@ -1792,6 +1792,7 @@ function renderAnalysis(flow){
           </tbody>
         </table>
       </div>
+      ${renderMonthSummary(m)}
     </div>`;
   });
 
@@ -1841,6 +1842,96 @@ function renderAnalysis(flow){
 }
 
 
+
+
+// ════════════════════════════════════════════════════════════════
+// SUMACE ŘÁDKŮ DPH — dle AbraFlexi reportu (jen sumační řádky)
+// ════════════════════════════════════════════════════════════════
+function renderMonthSummary(m){
+  // Seskupit řádky dokladů po skupinách DPH
+  const groups = {};
+  [...m.docLines, ...m.missingDocs].forEach(l=>{
+    const src = l.status === 'missing' ? 'hist' : 'cur';
+    const k = l.radky;
+    if(!groups[k]) groups[k] = {radky:k, curZk:0, curDph:0, histZk:0, histDph:0};
+    if(src==='cur'){ groups[k].curZk += l.zaklad; groups[k].curDph += l.dph; }
+    else { groups[k].histZk += l.histZ||0; groups[k].histDph += l.histD||0; }
+  });
+  // Přepočítat správně - sečíst ze všech docLines
+  Object.keys(groups).forEach(k=>{ groups[k].curZk=0; groups[k].curDph=0; groups[k].histZk=0; groups[k].histDph=0; });
+  m.docLines.forEach(l=>{
+    const k = l.radky;
+    if(!groups[k]) groups[k]={radky:k,curZk:0,curDph:0,histZk:0,histDph:0};
+    groups[k].curZk  = Math.round((groups[k].curZk  + l.zaklad)*100)/100;
+    groups[k].curDph = Math.round((groups[k].curDph + l.dph)*100)/100;
+    if(l.histZ!==null) groups[k].histZk  = Math.round((groups[k].histZk  + (l.histZ||0))*100)/100;
+    if(l.histD!==null) groups[k].histDph = Math.round((groups[k].histDph + (l.histD||0))*100)/100;
+  });
+  m.missingDocs.forEach(l=>{
+    const k = l.radky;
+    if(!groups[k]) groups[k]={radky:k,curZk:0,curDph:0,histZk:0,histDph:0};
+    groups[k].histZk  = Math.round((groups[k].histZk  + (l.zaklad||0))*100)/100;
+    groups[k].histDph = Math.round((groups[k].histDph + (l.dph||0))*100)/100;
+  });
+
+  const sorted = Object.values(groups).sort((a,b)=>a.radky.localeCompare(b.radky));
+  if(!sorted.length) return '';
+
+  // Celkové součty
+  const totCurOdZk=sorted.filter(g=>g.radky.match(/^0[12]|03-04|05-06/)).reduce((s,g)=>s+g.curZk,0);
+  const totCurOdDph=sorted.filter(g=>g.radky.match(/^0[12]|03-04|05-06/)).reduce((s,g)=>s+g.curDph,0);
+  const totCurPrZk=sorted.filter(g=>!g.radky.match(/^0[12]|03-04|05-06/)).reduce((s,g)=>s+g.curZk,0);
+  const totCurPrDph=sorted.filter(g=>!g.radky.match(/^0[12]|03-04|05-06/)).reduce((s,g)=>s+g.curDph,0);
+  const totHistOdDph=sorted.filter(g=>g.radky.match(/^0[12]|03-04|05-06/)).reduce((s,g)=>s+g.histDph,0);
+  const totHistPrDph=sorted.filter(g=>!g.radky.match(/^0[12]|03-04|05-06/)).reduce((s,g)=>s+g.histDph,0);
+  const odvodCur  = Math.round((totCurOdDph  - totCurPrDph)*100)/100;
+  const odvodHist = Math.round((totHistOdDph - totHistPrDph)*100)/100;
+  const odvodDiff = Math.round((odvodCur - odvodHist)*100)/100;
+
+  const isNew = m.noHist;
+  const hasDiff = !isNew && Math.abs(odvodDiff) > 0.05;
+
+  return `<div style="background:#f7f6f3;border-top:2px solid var(--border-s)">
+    <div style="padding:8px 16px 4px;font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">
+      Sumace řádků DPH
+    </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <thead><tr style="background:#eeecea">
+          <th style="padding:5px 10px;text-align:left;font-weight:700;font-size:10px;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">Řádky DPH</th>
+          <th style="padding:5px 10px;text-align:right;font-weight:700;font-size:10px;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">Základ (akt.)</th>
+          <th style="padding:5px 10px;text-align:right;font-weight:700;font-size:10px;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">DPH (akt.)</th>
+          <th style="padding:5px 10px;text-align:right;font-weight:700;font-size:10px;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">Základ (hist.)</th>
+          <th style="padding:5px 10px;text-align:right;font-weight:700;font-size:10px;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">DPH (hist.)</th>
+          <th style="padding:5px 10px;text-align:right;font-weight:700;font-size:10px;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">Δ DPH</th>
+        </tr></thead>
+        <tbody>
+          ${sorted.map(g=>{
+            const isOut = g.radky.match(/^0[12]|03-04|05-06/);
+            const diffDph = Math.round((g.curDph - g.histDph)*100)/100;
+            const hasDiffRow = !isNew && Math.abs(diffDph) > 0.05;
+            return '<tr style="'+(hasDiffRow?'background:#fff5f5':'')+'">'
+              +'<td style="padding:4px 10px;border-bottom:1px solid var(--border);font-family:var(--mono);font-weight:600;color:'+(isOut?'var(--navy)':'var(--text-mid)')+'">'+(isOut?'↑ ':'↓ ')+g.radky+'</td>'
+              +'<td style="padding:4px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono)">'+fmt(g.curZk)+'</td>'
+              +'<td style="padding:4px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);font-weight:600">'+fmt(g.curDph)+'</td>'
+              +'<td style="padding:4px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);color:var(--text-muted)">'+(isNew?'—':fmt(g.histZk))+'</td>'
+              +'<td style="padding:4px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);color:var(--text-muted)">'+(isNew?'—':fmt(g.histDph))+'</td>'
+              +'<td style="padding:4px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--mono);font-weight:700;color:'+(hasDiffRow?'var(--err)':'var(--text-muted)')+'">'+(isNew?'★ Nové':hasDiffRow?fmtDiff(diffDph):'—')+'</td>'
+              +'</tr>';
+          }).join('')}
+          <tr style="background:#eeecea;font-weight:800">
+            <td style="padding:5px 10px;font-size:11px;color:var(--navy)">ODVOD / VRATKA</td>
+            <td style="padding:5px 10px;text-align:right;font-family:var(--mono)">${fmt(totCurOdZk-totCurPrZk)}</td>
+            <td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-weight:800;color:${odvodCur>0?'var(--err)':'var(--ok)'}">${fmt(odvodCur)} Kč</td>
+            <td style="padding:5px 10px;text-align:right;font-family:var(--mono);color:var(--text-muted)"></td>
+            <td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-weight:700;color:var(--text-muted)">${isNew?'—':fmt(odvodHist)+' Kč'}</td>
+            <td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-weight:800;color:${hasDiff?'var(--err)':isNew?'var(--text-muted)':'var(--ok)'}">${isNew?'★ Nové':hasDiff?fmtDiff(odvodDiff)+' Kč':'✓ Sedí'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
 
 function renderXmlForMonth(m, flow){
   if(!m) return;
