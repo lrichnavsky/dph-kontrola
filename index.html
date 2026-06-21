@@ -168,7 +168,7 @@ header {
 .welcome-greeting span { color: var(--gold); }
 .welcome-sub { font-size: 14px; color: var(--text-muted); margin-top: 2px; }
 .mode-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr);
+  display: grid; grid-template-columns: repeat(3, 1fr);
   gap: 16px; margin-bottom: 32px;
 }
 @media (max-width: 700px) { .mode-grid { grid-template-columns: 1fr; } }
@@ -500,6 +500,19 @@ footer a:hover { color: var(--navy); }
         <div class="fi">📅</div>
         <div class="ft">Roční uzávěrka</div>
         <div class="fd">Kontrola celého roku</div>
+      </div>
+      <div class="mode-card" onclick="startFlow('e')">
+        <div class="mode-icon">
+          <svg viewBox="0 0 40 40" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="6" width="24" height="30" rx="3" stroke="#1C2B4A" stroke-width="2" fill="none"/>
+            <path d="M8 14h16M8 19h16M8 24h10" stroke="#C8A84B" stroke-width="1.8" stroke-linecap="round"/>
+            <circle cx="30" cy="30" r="7" fill="#1C2B4A"/>
+            <path d="M27.5 30h5M30 27.5v5" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="mode-title">Kontrola výpisů</div>
+        <div class="mode-desc">Přehled nahraných bankovních výpisů PDF a konečné stavy účtů ke konci nahraného období.</div>
+        <div class="mode-arrow">→</div>
       </div>
     </div>
   </div>
@@ -1010,6 +1023,7 @@ function startFlow(flow){
   if(flow==='b'){ showPage('pageB'); }
   if(flow==='c'){ showPage('pageC'); goStepC(1); }
   if(flow==='g'){ showPage('pageG'); }
+  if(flow==='e'){ showPage('pageE'); }
 }
 
 function goStepA(n){
@@ -2618,6 +2632,216 @@ async function buildPdfFromImages(imgDataList){
   return out;
 }
 
+
+// ════════════════════════════════════════════════════════════════
+// TOK E — KONTROLA BANKOVNÍCH VÝPISŮ
+// Struktura SP: Účetní agendy/{agenda}/Účetní doklady/{rok}/Banka/{banka}/Standard/PDF/
+// Soubory: "1 2026.pdf", "2 2026.pdf" ... nebo jiné formáty
+// ════════════════════════════════════════════════════════════════
+const MESICE_CS = ['','Leden','Únor','Březen','Duben','Květen','Červen','Červenec','Srpen','Září','Říjen','Listopad','Prosinec'];
+
+async function runBankCheck(){
+  const rok = document.getElementById('bvRok').value;
+  clearLog('bvLog');
+  document.getElementById('bvResults').innerHTML = '';
+  logTo('bvLog', `Kontroluji bankovní výpisy za rok ${rok}...`, 'info');
+
+  try{
+    const DRIVE = getDriveId();
+
+    // Načíst všechny agendy
+    const agendyData = await graphGet(`/drives/${DRIVE}/root:/tpCloud/%C3%9A%C4%8Detn%C3%AD%20agendy:/children?$select=id,name,webUrl&$top=200&$orderby=name`);
+    const agendy = (agendyData.value||[]).filter(f=>f.name&&f.name.match(/^[A-Z]{2,4}\s+-\s+/)&&!f.name.toLowerCase().includes('archiv'));
+
+    logTo('bvLog', `Nalezeno ${agendy.length} agend. Procházím...`, 'info');
+
+    const results = [];
+    let done = 0;
+
+    for(const agenda of agendy){
+      done++;
+      if(done % 5 === 0) logTo('bvLog', `Zpracováno ${done}/${agendy.length}...`);
+
+      // Hledat složku Banka pro daný rok
+      const bankaPath = `tpCloud/Účetní agendy/${agenda.name}/Účetní doklady/${rok}/Banka`;
+      let banky = [];
+      let noBanka = false;
+
+      try{
+        const bankaFolder = await graphGet(`/drives/${DRIVE}/root:/${encodeURIComponentPath(bankaPath)}:/children?$select=id,name,webUrl,folder&$top=50`);
+        const bankFolders = (bankaFolder.value||[]).filter(f=>f.folder);
+
+        if(bankFolders.length === 0){
+          noBanka = true;
+        } else {
+          // Pro každou banku najít PDF soubory
+          for(const banka of bankFolders){
+            const pdfFiles = await findBankPdfs(DRIVE, banka.id, banka.name, rok);
+            banky.push({name: banka.name, webUrl: banka.webUrl, files: pdfFiles});
+          }
+        }
+      } catch(e){
+        noBanka = true;
+      }
+
+      const kod = agenda.name.match(/^([A-Z0-9]+)/)?.[1]||'';
+      results.push({kod, name:agenda.name, webUrl:agenda.webUrl, banky, noBanka});
+    }
+
+    logTo('bvLog', `Hotovo. Zpracováno ${results.length} agend.`, 'ok');
+    renderBankResults(results, rok);
+
+  } catch(e){
+    logTo('bvLog', 'Chyba: '+e.message, 'err');
+  }
+}
+
+async function findBankPdfs(driveId, bankFolderId, bankName, rok){
+  // Hledat PDF soubory rekurzivně (Standard/PDF/ nebo přímo)
+  const files = [];
+
+  async function scanFolder(folderId, depth){
+    if(depth > 3) return;
+    try{
+      const data = await graphGet(`/drives/${driveId}/items/${folderId}/children?$select=id,name,webUrl,file,folder,lastModifiedDateTime&$top=100`);
+      const items = data.value||[];
+      for(const item of items){
+        if(item.file && item.name.toLowerCase().endsWith('.pdf')){
+          // Parsovat měsíc z názvu: "1 2026.pdf", "01 2026.pdf", "leden 2026.pdf" atd.
+          const month = parseMonthFromFilename(item.name, rok);
+          files.push({
+            id:item.id, name:item.name, webUrl:item.webUrl,
+            month, size: item.size,
+            modified: item.lastModifiedDateTime?.substring(0,10)||''
+          });
+        } else if(item.folder && depth < 3){
+          await scanFolder(item.id, depth+1);
+        }
+      }
+    } catch(e){}
+  }
+
+  await scanFolder(bankFolderId, 0);
+
+  // Seřadit podle měsíce
+  files.sort((a,b)=>(a.month||99)-(b.month||99));
+  return files;
+}
+
+function parseMonthFromFilename(name, rok){
+  // "1 2026.pdf" nebo "01 2026.pdf"
+  let m = name.match(/^(\d{1,2})\s+\d{4}/);
+  if(m) return parseInt(m[1]);
+  // "leden 2026.pdf" atd.
+  const mesNazvy = ['leden','únor','únor','březen','duben','květen','červen','červenec','srpen','září','říjen','listopad','prosinec'];
+  const lower = name.toLowerCase();
+  for(let i=0;i<mesNazvy.length;i++){
+    if(lower.includes(mesNazvy[i])) return i+1;
+  }
+  // Pokud obsahuje jen rok, neznámý měsíc
+  if(name.includes(rok)) return null;
+  return null;
+}
+
+function renderBankResults(results, rok){
+  const withBanka = results.filter(r=>!r.noBanka);
+  const noBanka   = results.filter(r=>r.noBanka);
+
+  // Statistiky
+  let allFileCounts = withBanka.flatMap(r=>r.banky.flatMap(b=>b.files));
+  const totalFiles  = allFileCounts.length;
+  const missingMes  = withBanka.filter(r=>r.banky.some(b=>b.files.length<12)).length;
+
+  let html = `
+  <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+    <div class="stat"><div class="sv">${results.length}</div><div class="sl">Agend celkem</div></div>
+    <div class="stat ok"><div class="sv">${withBanka.length}</div><div class="sl">Má složku Banka</div></div>
+    <div class="stat ${missingMes>0?'warn':'ok'}"><div class="sv">${missingMes}</div><div class="sl">Neúplné výpisy</div></div>
+    <div class="stat ${noBanka.length>0?'warn':'ok'}"><div class="sv">${noBanka.length}</div><div class="sl">Bez složky Banka</div></div>
+  </div>`;
+
+  // Agendy s bankovními výpisy
+  if(withBanka.length > 0){
+    html += `<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Agendy s bankovními výpisy (${withBanka.length})</div>`;
+    html += `<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">`;
+
+    for(const r of withBanka){
+      const allComplete = r.banky.every(b=>{
+        // Zkontrolovat jestli jsou výpisy za všechny měsíce do aktuálního
+        const now = new Date();
+        const maxMes = parseInt(rok) < now.getFullYear() ? 12 : now.getMonth(); // do předchozího měsíce
+        const months = b.files.map(f=>f.month).filter(Boolean);
+        for(let m=1;m<=maxMes;m++){
+          if(!months.includes(m)) return false;
+        }
+        return true;
+      });
+
+      html += `<div style="border:1.5px solid ${allComplete?'var(--ok-border)':'var(--warn)'};border-radius:var(--r);overflow:hidden;background:var(--white)">
+        <div style="padding:10px 16px;background:${allComplete?'var(--ok-bg)':'var(--warn-bg)'};display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-weight:800;font-size:12px;font-family:var(--mono);color:${allComplete?'var(--ok)':'var(--warn)'}">${r.kod}</span>
+            <span style="font-size:12px;font-weight:600;color:var(--navy)">${r.name.replace(/\(AG\d+\)/,'').trim()}</span>
+          </div>
+          <a href="${r.webUrl}" target="_blank" style="font-size:10px;color:var(--text-muted);text-decoration:none">↗ SP</a>
+        </div>`;
+
+      for(const banka of r.banky){
+        const now = new Date();
+        const maxMes = parseInt(rok) < now.getFullYear() ? 12 : now.getMonth();
+        const months = banka.files.map(f=>f.month).filter(Boolean);
+        const missing = [];
+        for(let m=1;m<=maxMes;m++){
+          if(!months.includes(m)) missing.push(m);
+        }
+
+        // Konečný stav = poslední soubor
+        const lastFile = banka.files[banka.files.length-1];
+        const lastMonth = lastFile?.month;
+        const lastMonthName = lastMonth ? MESICE_CS[lastMonth] : '—';
+
+        html += `<div style="padding:8px 16px;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:12px;font-weight:700;color:var(--navy)">🏦 ${banka.name}</span>
+            <div style="display:flex;align-items:center;gap:12px">
+              ${lastFile?`<span style="font-size:11px;color:var(--text-muted)">poslední výpis: <b style="color:var(--navy)">${lastMonthName} ${rok}</b></span>`:''}
+              <a href="${banka.webUrl}" target="_blank" style="font-size:10px;color:var(--accent);text-decoration:none">↗ složka</a>
+            </div>
+          </div>
+          ${missing.length>0?`<div style="font-size:11px;color:var(--warn);margin-bottom:6px;font-weight:600">⚠ Chybí výpisy: ${missing.map(m=>MESICE_CS[m]).join(', ')}</div>`:''}
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${Array.from({length:maxMes},(_, i)=>{
+              const mes = i+1;
+              const f = banka.files.find(x=>x.month===mes);
+              const hasFile = !!f;
+              return `<a ${f?`href="${f.webUrl}" target="_blank"`:''}
+                style="display:inline-flex;align-items:center;justify-content:center;
+                width:28px;height:28px;border-radius:6px;font-size:10px;font-weight:700;
+                text-decoration:none;
+                ${hasFile?'background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border);cursor:pointer':'background:#f5f4f0;color:#bbb;border:1px solid #e5e5e0;cursor:default'}"
+                title="${MESICE_CS[mes]}${f?' - '+f.name:' - chybí'}">${mes}</a>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Agendy bez složky Banka
+  if(noBanka.length > 0){
+    html += `<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Bez složky Banka za ${rok} (${noBanka.length})</div>`;
+    html += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    for(const r of noBanka){
+      html += `<span style="padding:4px 10px;background:var(--cream);border:1px solid var(--border);border-radius:6px;font-size:11px;font-weight:600;color:var(--text-muted)">${r.kod}</span>`;
+    }
+    html += '</div>';
+  }
+
+  document.getElementById('bvResults').innerHTML = html;
+}
+
 </script>
 
 <!-- ═══════════════════════════════════════════ -->
@@ -2872,6 +3096,34 @@ async function buildPdfFromImages(imgDataList){
 </div><!-- /gpc-wrap -->
 </div><!-- /pageG -->
 
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- PAGE: TOK E — Kontrola bankovních výpisů    -->
+<!-- ═══════════════════════════════════════════ -->
+<div id="pageE" class="page">
+<div class="app-shell">
+  <button class="back-btn" onclick="goHome()">← Zpět na výběr</button>
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Kontrola bankovních výpisů</span>
+      <span style="font-size:11px;color:var(--text-muted)">SharePoint · Účetní doklady · Banka</span>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:20px">
+        <div class="field" style="flex:0 0 90px">
+          <label>Rok</label>
+          <select id="bvRok">
+            <option>2026</option><option>2025</option><option>2024</option><option>2023</option>
+          </select>
+        </div>
+        <button class="btn-dark" onclick="runBankCheck()" style="padding:9px 24px">🔍 Spustit kontrolu</button>
+      </div>
+      <div id="bvLog" class="log hidden"></div>
+      <div id="bvResults" style="margin-top:16px"></div>
+    </div>
+  </div>
+</div>
 </div>
 </body>
 </html>
