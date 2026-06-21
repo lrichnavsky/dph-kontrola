@@ -485,36 +485,7 @@ footer a:hover { color: var(--navy); }
       Přihlásit se přes Microsoft 365
     </button>
     <p class="landing-note">🔒 Přihlášení probíhá přímo přes váš Microsoft účet · Data neopouštějí M365 tenant</p>
-    <div class="landing-features">
-      <div class="feature-chip">
-        <div class="fi" style="font-size:20px">📋</div>
-        <div class="ft">Kontrola DPH</div>
-        <div class="fd">Porovnání dokladů s historií</div>
-      </div>
-      <div class="feature-chip">
-        <div class="fi">✅</div>
-        <div class="ft">Úplnost DPH</div>
-        <div class="fd">Přehled všech agend</div>
-      </div>
-      <div class="feature-chip">
-        <div class="fi">📅</div>
-        <div class="ft">Roční uzávěrka</div>
-        <div class="fd">Kontrola celého roku</div>
-      </div>
-      <div class="mode-card" onclick="startFlow('e')">
-        <div class="mode-icon">
-          <svg viewBox="0 0 40 40" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="4" y="6" width="24" height="30" rx="3" stroke="#1C2B4A" stroke-width="2" fill="none"/>
-            <path d="M8 14h16M8 19h16M8 24h10" stroke="#C8A84B" stroke-width="1.8" stroke-linecap="round"/>
-            <circle cx="30" cy="30" r="7" fill="#1C2B4A"/>
-            <path d="M27.5 30h5M30 27.5v5" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="mode-title">Kontrola výpisů</div>
-        <div class="mode-desc">Přehled nahraných bankovních výpisů PDF a konečné stavy účtů ke konci nahraného období.</div>
-        <div class="mode-arrow">→</div>
-      </div>
-    </div>
+
   </div>
   <footer><a onclick="openAdmin()">⚙ Nastavení připojení</a></footer>
 </div>
@@ -585,6 +556,19 @@ footer a:hover { color: var(--navy); }
         <div class="mode-title">GPC Agent</div>
         <div class="mode-desc">Převod ČSOB bankovního výpisu (foto/PDF) na <code style="font-size:11px;background:#EEF2FF;padding:1px 5px;border-radius:3px">.gpc</code> soubor pro import do Pohody nebo Money S3.</div>
         <div class="mode-arrow" style="color:#6366F1">→</div>
+      </div>
+      <div class="mode-card" onclick="startFlow('e')">
+        <div class="mode-icon">
+          <svg viewBox="0 0 40 40" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="6" width="24" height="30" rx="3" stroke="#1C2B4A" stroke-width="2" fill="none"/>
+            <path d="M8 14h16M8 19h16M8 24h10" stroke="#C8A84B" stroke-width="1.8" stroke-linecap="round"/>
+            <circle cx="30" cy="30" r="7" fill="#1C2B4A"/>
+            <path d="M27.5 30h5M30 27.5v5" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="mode-title">Kontrola výpisů</div>
+        <div class="mode-desc">Přehled nahraných bankovních výpisů PDF a konečné stavy účtů ke konci nahraného období.</div>
+        <div class="mode-arrow">→</div>
       </div>
     </div>
   </div>
@@ -2062,7 +2046,7 @@ function renderCompletenessResults(results, month, year){
     ...noDph.sort((a,b)=>a.kod.localeCompare(b.kod)),
   ];
 
-  html += `<div class="cc-grid">`;
+  html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">`;
 
   for(const r of sorted){
     const statusColor = r.status==='ok'?'var(--ok)':r.status==='empty'?'var(--warn)':r.status==='missing'?'var(--err)':'var(--muted)';
@@ -2073,21 +2057,20 @@ function renderCompletenessResults(results, month, year){
                         r.status==='missing'?`Složka ${month+year.substring(2)} / ${month+year} nenalezena`:
                         'Nemá strukturu KH a DPH / '+year;
 
-    html+=`<div style="border:1.5px solid ${statusColor};border-radius:var(--r);overflow:hidden;background:var(--surface)">
-      <div style="padding:8px 12px;background:${statusBg};display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-weight:800;font-size:13px;color:${statusColor};font-family:var(--mono)">${r.kod}</span>
-          <span style="font-size:11px;font-weight:600;color:${statusColor}">${statusIcon}</span>
+    html+=`<div style="border:1.5px solid ${statusColor};border-radius:var(--r);overflow:hidden;background:var(--white)">
+      <div style="padding:7px 11px;background:${statusBg};display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span style="font-weight:800;font-size:12px;color:${statusColor};font-family:var(--mono)">${r.kod}</span>
+          <span style="font-size:10px;font-weight:700;color:${statusColor}">${statusIcon}</span>
         </div>
         <a href="${r.webUrl}" target="_blank" style="font-size:10px;color:${statusColor};text-decoration:none">↗ SP</a>
       </div>
-      <div style="padding:8px 12px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${r.nazev.replace(/\(AG\d+\)/,'').trim()}</div>
-        <div style="font-size:11px;color:${statusColor};font-weight:600;margin-bottom:6px">${statusText}</div>
+      <div style="padding:7px 11px">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nazev.replace(/\(AG\d+\)/,'').trim()}</div>
+        <div style="font-size:11px;color:${statusColor};font-weight:600;margin-bottom:5px">${statusText}</div>
         ${r.files.length>0?`<div style="display:flex;flex-direction:column;gap:2px">
-          ${r.files.map(f=>`<a href="${f.webUrl}" target="_blank" style="font-size:10px;font-family:var(--mono);color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block" title="${f.name}">
-            ${f.subfolder?`<span style="color:var(--muted)">[${f.subfolder}] </span>`:''}${f.name}
-          </a>`).join('')}
+          ${r.files.slice(0,5).map(f=>`<a href="${f.webUrl}" target="_blank" style="font-size:10px;font-family:var(--mono);color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block" title="${f.name}">${f.name}</a>`).join('')}
+          ${r.files.length>5?`<span style="font-size:10px;color:var(--text-muted)">+ ${r.files.length-5} dalších...</span>`:''}
         </div>`:''}
       </div>
     </div>`;
@@ -2697,31 +2680,39 @@ async function runBankCheck(){
 }
 
 async function findBankPdfs(driveId, bankFolderId, bankName, rok){
-  // Hledat PDF soubory rekurzivně (Standard/PDF/ nebo přímo)
+  // Hledat PDF soubory rekurzivně - max hloubka 5 pro složité struktury
+  // ČSOB: Banka/ČSOB/Debetní účty/234639368-0300 (CZK)/soubory.pdf
   const files = [];
+  const accounts = new Map(); // číslo účtu → soubory
 
-  async function scanFolder(folderId, depth){
-    if(depth > 3) return;
+  async function scanFolder(folderId, depth, accountLabel){
+    if(depth > 5) return;
     try{
-      const data = await graphGet(`/drives/${driveId}/items/${folderId}/children?$select=id,name,webUrl,file,folder,lastModifiedDateTime&$top=100`);
+      const data = await graphGet('/drives/'+driveId+'/items/'+folderId+'/children?$select=id,name,webUrl,file,folder,lastModifiedDateTime,size&$top=100');
       const items = data.value||[];
       for(const item of items){
         if(item.file && item.name.toLowerCase().endsWith('.pdf')){
-          // Parsovat měsíc z názvu: "1 2026.pdf", "01 2026.pdf", "leden 2026.pdf" atd.
           const month = parseMonthFromFilename(item.name, rok);
-          files.push({
-            id:item.id, name:item.name, webUrl:item.webUrl,
-            month, size: item.size,
-            modified: item.lastModifiedDateTime?.substring(0,10)||''
-          });
-        } else if(item.folder && depth < 3){
-          await scanFolder(item.id, depth+1);
+          // Filtrovat jen soubory obsahující rok (nebo bez data - přijmeme taky)
+          const nameHasYear = item.name.includes(rok) || item.name.includes(rok.slice(2));
+          if(month || nameHasYear){
+            files.push({
+              id:item.id, name:item.name, webUrl:item.webUrl,
+              month, account:accountLabel||'',
+              modified: item.lastModifiedDateTime?.substring(0,10)||''
+            });
+          }
+        } else if(item.folder){
+          // Detekovat název účtu z názvu složky (obsahuje číslo-)
+          const isAccount = item.name.match(/^\d{6,}/);
+          const nextLabel = isAccount ? item.name : accountLabel;
+          await scanFolder(item.id, depth+1, nextLabel);
         }
       }
     } catch(e){}
   }
 
-  await scanFolder(bankFolderId, 0);
+  await scanFolder(bankFolderId, 0, '');
 
   // Seřadit podle měsíce
   files.sort((a,b)=>(a.month||99)-(b.month||99));
@@ -2729,17 +2720,30 @@ async function findBankPdfs(driveId, bankFolderId, bankName, rok){
 }
 
 function parseMonthFromFilename(name, rok){
-  // "1 2026.pdf" nebo "01 2026.pdf"
-  let m = name.match(/^(\d{1,2})\s+\d{4}/);
-  if(m) return parseInt(m[1]);
-  // "leden 2026.pdf" atd.
+  // Formát ČSOB/KB: "234639368_20260131_1_MCZB.pdf" → hledat _YYYYMMDD_
+  const dateFmt = name.match(/_(\d{4})(\d{2})(\d{2})_/);
+  if(dateFmt && dateFmt[1]===rok) return parseInt(dateFmt[2]);
+
+  // Formát s datem YYYY-MM-DD kdekoliv v názvu
+  const dateIso = name.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if(dateIso && dateIso[1]===rok) return parseInt(dateIso[2]);
+
+  // Raiffeisen: "1 2026.pdf", "01 2026.pdf"
+  const numFmt = name.match(/^(\d{1,2})\s+\d{4}/);
+  if(numFmt) return parseInt(numFmt[1]);
+
+  // Formát "01_2026.pdf" nebo "2026_01.pdf"
+  const numFmt2 = name.match(/^(\d{1,2})[_-]\d{4}/);
+  if(numFmt2) return parseInt(numFmt2[1]);
+  const numFmt3 = name.match(/\d{4}[_-](\d{2})/);
+  if(numFmt3) return parseInt(numFmt3[1]);
+
+  // České názvy měsíců
   const mesNazvy = ['leden','únor','únor','březen','duben','květen','červen','červenec','srpen','září','říjen','listopad','prosinec'];
   const lower = name.toLowerCase();
   for(let i=0;i<mesNazvy.length;i++){
     if(lower.includes(mesNazvy[i])) return i+1;
   }
-  // Pokud obsahuje jen rok, neznámý měsíc
-  if(name.includes(rok)) return null;
   return null;
 }
 
@@ -2814,12 +2818,13 @@ function renderBankResults(results, rok){
               const mes = i+1;
               const f = banka.files.find(x=>x.month===mes);
               const hasFile = !!f;
-              return `<a ${f?`href="${f.webUrl}" target="_blank"`:''}
-                style="display:inline-flex;align-items:center;justify-content:center;
-                width:28px;height:28px;border-radius:6px;font-size:10px;font-weight:700;
-                text-decoration:none;
-                ${hasFile?'background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border);cursor:pointer':'background:#f5f4f0;color:#bbb;border:1px solid #e5e5e0;cursor:default'}"
-                title="${MESICE_CS[mes]}${f?' - '+f.name:' - chybí'}">${mes}</a>`;
+              const tooltip = hasFile ? mes+'. '+rok+': '+f.name+(f.account?' ('+f.account+')':'') : MESICE_CS[mes]+' - chybí';
+              return '<a '+(f?'href="'+f.webUrl+'" target="_blank"':'')+
+                ' style="display:inline-flex;align-items:center;justify-content:center;'+
+                'width:28px;height:28px;border-radius:6px;font-size:10px;font-weight:700;'+
+                'text-decoration:none;'+
+                (hasFile?'background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border);cursor:pointer':'background:#f5f4f0;color:#bbb;border:1px solid #e5e5e0;cursor:default')+'"'+
+                ' title="'+tooltip+'">'+(hasFile?'<b>'+mes+'</b>':mes)+'</a>';
             }).join('')}
           </div>
         </div>`;
