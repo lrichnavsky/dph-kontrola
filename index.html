@@ -190,7 +190,13 @@ header {
 }
 .mode-card:hover { border-color: var(--gold); box-shadow: var(--shadow-lg); transform: translateY(-2px); }
 .mode-card:hover::before { opacity: 1; }
-.mode-icon { font-size: 32px; margin-bottom: 14px; }
+.mode-icon {
+  font-size: 32px; margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: center;
+  width: 72px; height: 72px;
+  background: var(--cream); border-radius: 16px;
+  border: 1px solid var(--border);
+}
 .mode-title { font-size: 16px; font-weight: 800; color: var(--navy); margin-bottom: 6px; }
 .mode-desc { font-size: 12px; color: var(--text-mid); line-height: 1.5; }
 .mode-arrow {
@@ -403,7 +409,7 @@ footer a:hover { color: var(--navy); }
 <!-- PIN OVERLAY -->
 <div id="pinOverlay" style="display:none">
   <div class="pin-card">
-    <div class="pin-logo">tp</div>
+    <div class="pin-logo" style="background:var(--navy)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="235 221 4350 4350" width="36" height="36"><path d="M4513,2312c0,1155-958,2091-2139,2091c-1181,0-2139-936-2139-2091c0-1155,958-2090,2139-2090l0-63c-1216,0-2202,964-2202,2153c0,1190,986,2154,2202,2154c1217,0,2203-965,2203-2154l-63,0Z" fill="#C8A84B"/><path d="M1926,3025c-158,0-289-50-390-151c-102-100-153-233-153-399l0-1319l340,0l0,406l270,0l0,317l-270,0l0,599c0,69,22,126,65,169c43,44,100,65,170,65l35,0l0,311l-67,0Z" fill="#C8A84B"/><path d="M2107,2241c0-195,74-364,220-506c147-142,325-213,534-213c211,0,388,72,531,217c143,144,214,324,214,540c0,218-72,399-217,546c-145,146-326,219-543,219c-72,0-166-18-282-53l0-338l120,33c28,6,64,9,109,9c149,0,263-36,343-108c80-72,120-176,120-313c0-115-39-212-117-291c-78-79-174-119-288-119c-110,0-204,39-285,117c-80,78-120,174-120,289l0,1383l-340,0l0-1410Z" fill="#C8A84B"/></svg></div>
     <div class="pin-title">DPH Kontrola</div>
     <div class="pin-sub">tpCloud · interní nástroj</div>
     <input id="pinInput" type="password" maxlength="10" placeholder="• • • • • •"
@@ -445,7 +451,7 @@ footer a:hover { color: var(--navy); }
 <!-- HEADER -->
 <header>
   <div class="brand-wrap" onclick="goHome()">
-    <div class="brand-logo">tp</div>
+    <div class="brand-logo" style="background:transparent;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="235 221 4350 4350" width="32" height="32"><path d="M4513,2312c0,1155-958,2091-2139,2091c-1181,0-2139-936-2139-2091c0-1155,958-2090,2139-2090l0-63c-1216,0-2202,964-2202,2153c0,1190,986,2154,2202,2154c1217,0,2203-965,2203-2154l-63,0Z" fill="#C8A84B"/><path d="M1926,3025c-158,0-289-50-390-151c-102-100-153-233-153-399l0-1319l340,0l0,406l270,0l0,317l-270,0l0,599c0,69,22,126,65,169c43,44,100,65,170,65l35,0l0,311l-67,0Z" fill="#C8A84B"/><path d="M2107,2241c0-195,74-364,220-506c147-142,325-213,534-213c211,0,388,72,531,217c143,144,214,324,214,540c0,218-72,399-217,546c-145,146-326,219-543,219c-72,0-166-18-282-53l0-338l120,33c28,6,64,9,109,9c149,0,263-36,343-108c80-72,120-176,120-313c0-115-39-212-117-291c-78-79-174-119-288-119c-110,0-204,39-285,117c-80,78-120,174-120,289l0,1383l-340,0l0-1410Z" fill="#C8A84B"/></svg></div>
     <div>
       <div class="brand">DPH Kontrola</div>
       <div class="brand-sub">tpCloud · AbraFlexi</div>
@@ -466,7 +472,7 @@ footer a:hover { color: var(--navy); }
 <!-- ═══════════════════════════════════════════ -->
 <div id="pageLanding" class="page active">
   <div class="landing">
-    <div class="landing-logo">tp</div>
+    <div class="landing-logo" style="background:var(--navy)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="235 221 4350 4350" width="52" height="52"><path d="M4513,2312c0,1155-958,2091-2139,2091c-1181,0-2139-936-2139-2091c0-1155,958-2090,2139-2090l0-63c-1216,0-2202,964-2202,2153c0,1190,986,2154,2202,2154c1217,0,2203-965,2203-2154l-63,0Z" fill="#C8A84B"/><path d="M1926,3025c-158,0-289-50-390-151c-102-100-153-233-153-399l0-1319l340,0l0,406l270,0l0,317l-270,0l0,599c0,69,22,126,65,169c43,44,100,65,170,65l35,0l0,311l-67,0Z" fill="#C8A84B"/><path d="M2107,2241c0-195,74-364,220-506c147-142,325-213,534-213c211,0,388,72,531,217c143,144,214,324,214,540c0,218-72,399-217,546c-145,146-326,219-543,219c-72,0-166-18-282-53l0-338l120,33c28,6,64,9,109,9c149,0,263-36,343-108c80-72,120-176,120-313c0-115-39-212-117-291c-78-79-174-119-288-119c-110,0-204,39-285,117c-80,78-120,174-120,289l0,1383l-340,0l0-1410Z" fill="#C8A84B"/></svg></div>
     <h1 class="landing-title">DPH Kontrola<br><span>pro tpCloud</span></h1>
     <p class="landing-sub">Automatická kontrola DPH dokladů, porovnání s historií, generování závazků a interních dokladů pro AbraFlexi.</p>
     <button class="landing-login-btn" onclick="msalLogin()">
@@ -481,7 +487,7 @@ footer a:hover { color: var(--navy); }
     <p class="landing-note">🔒 Přihlášení probíhá přímo přes váš Microsoft účet · Data neopouštějí M365 tenant</p>
     <div class="landing-features">
       <div class="feature-chip">
-        <div class="fi">📋</div>
+        <div class="fi" style="font-size:20px">📋</div>
         <div class="ft">Kontrola DPH</div>
         <div class="fd">Porovnání dokladů s historií</div>
       </div>
@@ -513,25 +519,56 @@ footer a:hover { color: var(--navy); }
     </div>
     <div class="mode-grid">
       <div class="mode-card" onclick="startFlow('a')">
-        <div class="mode-icon">📋</div>
+        <div class="mode-icon">
+          <svg viewBox="0 0 40 40" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="6" y="5" width="22" height="30" rx="3" stroke="#1C2B4A" stroke-width="2" fill="none"/>
+            <path d="M10 13h14M10 18h14M10 23h8" stroke="#C8A84B" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="29" cy="29" r="7" fill="#C8A84B"/>
+            <path d="M26.5 29l2 2 3.5-3.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
         <div class="mode-title">Kontrola DPH období</div>
         <div class="mode-desc">Porovnání dokladů aktuálního roku s uzavřenými měsíčními DPH. Generování závazku nebo pohledávky a interního dokladu.</div>
         <div class="mode-arrow">→</div>
       </div>
       <div class="mode-card" onclick="startFlow('b')">
-        <div class="mode-icon">✅</div>
+        <div class="mode-icon">
+          <svg viewBox="0 0 40 40" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="8" width="32" height="24" rx="3" stroke="#1C2B4A" stroke-width="2" fill="none"/>
+            <rect x="8" y="14" width="6" height="12" rx="1" fill="#C8A84B"/>
+            <rect x="17" y="18" width="6" height="8" rx="1" fill="#C8A84B" opacity=".6"/>
+            <rect x="26" y="11" width="6" height="15" rx="1" fill="#1C2B4A" opacity=".3"/>
+          </svg>
+        </div>
         <div class="mode-title">Kontrola úplnosti DPH</div>
         <div class="mode-desc">Rychlý přehled všech agend — které mají vyplněnou složku pro dané DPH období a které ne.</div>
         <div class="mode-arrow">→</div>
       </div>
       <div class="mode-card" onclick="startFlow('c')">
-        <div class="mode-icon">📅</div>
+        <div class="mode-icon">
+          <svg viewBox="0 0 40 40" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="5" y="8" width="30" height="27" rx="3" stroke="#1C2B4A" stroke-width="2" fill="none"/>
+            <path d="M5 15h30" stroke="#1C2B4A" stroke-width="2"/>
+            <path d="M13 5v6M27 5v6" stroke="#C8A84B" stroke-width="2" stroke-linecap="round"/>
+            <path d="M11 22h6v6h-6z" fill="#C8A84B" rx="1"/>
+            <path d="M20 22h9" stroke="#1C2B4A" stroke-width="1.5" stroke-linecap="round" opacity=".4"/>
+            <path d="M20 27h6" stroke="#1C2B4A" stroke-width="1.5" stroke-linecap="round" opacity=".4"/>
+          </svg>
+        </div>
         <div class="mode-title">Roční uzávěrka</div>
         <div class="mode-desc">Kontrola celého uzavřeného roku. Porovnání ročního sumárního souboru se všemi měsíčními DPH přiznáními.</div>
         <div class="mode-arrow">→</div>
       </div>
       <div class="mode-card" onclick="startFlow('g')" style="border-color:#E0E7FF">
-        <div class="mode-icon">🏦</div>
+        <div class="mode-icon">
+          <svg viewBox="0 0 40 40" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="10" width="32" height="20" rx="4" stroke="#1C2B4A" stroke-width="2" fill="none"/>
+            <circle cx="12" cy="20" r="3" fill="#C8A84B"/>
+            <path d="M18 17h14M18 20h10M18 23h12" stroke="#1C2B4A" stroke-width="1.5" stroke-linecap="round" opacity=".5"/>
+            <path d="M28 28v4M12 28v4" stroke="#1C2B4A" stroke-width="1.5" stroke-linecap="round" opacity=".3"/>
+            <path d="M8 32h24" stroke="#1C2B4A" stroke-width="1.5" stroke-linecap="round" opacity=".3"/>
+          </svg>
+        </div>
         <div class="mode-title">GPC Agent</div>
         <div class="mode-desc">Převod ČSOB bankovního výpisu (foto/PDF) na <code style="font-size:11px;background:#EEF2FF;padding:1px 5px;border-radius:3px">.gpc</code> soubor pro import do Pohody nebo Money S3.</div>
         <div class="mode-arrow" style="color:#6366F1">→</div>
@@ -1419,6 +1456,8 @@ function parseXlsxToRows(wb){
 
 function runAnalysis(flow){
   const s = state[flow||'a'];
+  const currentFile = s.currentFile;
+  const histFiles   = s.histFiles;
   if(!currentFile){
     alert('Není načten žádný soubor.');
     return;
@@ -1434,7 +1473,8 @@ function runAnalysis(flow){
   const curRows = parseXlsxToRows(wb);
 
   if(curRows.length === 0){
-    document.getElementById('statsBar').innerHTML='<div class="alert err" style="grid-column:1/-1">Soubor byl načten ale neobsahuje žádné doklady — zkontrolujte formát (musí být Podklady DPH seskupené z AbraFlexi).</div>';
+    const _sbErr=document.getElementById('statsBar'+(flow||'a').toUpperCase());
+    if(_sbErr) _sbErr.innerHTML='<div class="alert err" style="grid-column:1/-1">Soubor byl načten ale neobsahuje žádné doklady — zkontrolujte formát (musí být Podklady DPH seskupené z AbraFlexi).</div>';
     return;
   }
 
@@ -1912,7 +1952,7 @@ async function runCompletenessCheck(){
     logTo('ccLog',`Hledám složky "${month+shortYear}" a "${month+year}" v Účetní agendy...`,'info');
 
     // Načíst seznam všech agend (children Účetní agendy)
-    const agendyData = await graphGet(`/drives/${DRIVE_ID}/root:/tpCloud/%C3%9A%C4%8Detn%C3%AD%20agendy:/children?$select=id,name,webUrl&$top=200&$orderby=name`);
+    const agendyData = await graphGet(`/drives/${getDriveId()}/root:/tpCloud/%C3%9A%C4%8Detn%C3%AD%20agendy:/children?$select=id,name,webUrl&$top=200&$orderby=name`);
     const agendyAll = (agendyData.value||[]).filter(f=>f.name&&f.name.match(/^[A-Z]{2,4} - /));
 
     logTo('ccLog',`Nalezeno ${agendyAll.length} agend. Kontroluji každou...`,'info');
@@ -1936,7 +1976,7 @@ async function runCompletenessCheck(){
       try{
         // Načíst obsah roku
         const yearFolderData = await graphGet(
-          `/drives/${DRIVE_ID}/root:/${encodeURIComponentPath(dphBasePath)}:/children?$select=id,name,webUrl,file,folder,lastModifiedDateTime&$top=100`
+          `/drives/${getDriveId()}/root:/${encodeURIComponentPath(dphBasePath)}:/children?$select=id,name,webUrl,file,folder,lastModifiedDateTime&$top=100`
         );
         const yearChildren = yearFolderData.value||[];
 
@@ -1948,14 +1988,14 @@ async function runCompletenessCheck(){
           status = 'empty';
           // Načíst obsah složky měsíce
           const monthChildren = await graphGet(
-            `/drives/${DRIVE_ID}/items/${monthFolder.id}/children?$select=id,name,webUrl,file,folder,lastModifiedDateTime&$top=100`
+            `/drives/${getDriveId()}/items/${monthFolder.id}/children?$select=id,name,webUrl,file,folder,lastModifiedDateTime&$top=100`
           );
           const allItems = monthChildren.value||[];
 
           // Rekurzivně projít podsložky (DPH - řádné, DPH - opravné atd.)
           for(const item of allItems){
             if(item.folder){
-              const sub = await graphGet(`/drives/${DRIVE_ID}/items/${item.id}/children?$select=id,name,webUrl,file,lastModifiedDateTime&$top=50`);
+              const sub = await graphGet(`/drives/${getDriveId()}/items/${item.id}/children?$select=id,name,webUrl,file,lastModifiedDateTime&$top=50`);
               (sub.value||[]).filter(f=>f.file).forEach(f=>files.push({...f, subfolder:item.name}));
             } else if(item.file){
               files.push({...item, subfolder:''});
@@ -2341,7 +2381,7 @@ async function gpcConvert(){
     const resp = await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:GPC_MODEL,max_tokens:8000,system:GPC_BANKS[gpcSelectedBank]?.prompt||GPC_SYSTEM,messages:[{role:'user',content:msgContent}]})
+      body:JSON.stringify({model:GPC_MODEL,max_tokens:8000,system:(GPC_BANKS[gpcSelectedBank]||GPC_BANKS.csob).prompt,messages:[{role:'user',content:msgContent}]})
     });
     if(!resp.ok) throw new Error(`API error ${resp.status}: ${await resp.text()}`);
     const apiData = await resp.json();
@@ -2394,13 +2434,13 @@ async function gpcConvert(){
     const url = URL.createObjectURL(blob);
     dlEl.innerHTML=`<a href="${url}" download="${fname}" style="display:inline-flex;align-items:center;gap:7px;background:var(--ok-bg);color:var(--ok);border:1.5px solid var(--ok-border);border-radius:var(--r-sm);padding:9px 18px;font-size:13px;font-weight:700;text-decoration:none;font-family:inherit">↓ Stáhnout ${fname}</a>`;
 
-    document.getElementById('gpcJsonBtn').classList.remove('hidden');
+    const _jb=document.getElementById('gpcJsonBtn'); if(_jb) _jb.style.display='inline-flex';
 
   }catch(e){
     gpcAddLog('✗ Chyba: '+e.message,'err');
   }
 
-  btn.disabled=false; btn.innerHTML='⚡ Konvertovat → GPC'; btn.style.opacity='1';
+  if(btn){btn.disabled=false; btn.innerHTML='⚡ Konvertovat → GPC'; btn.style.opacity='1';}
 }
 
 function gpcAddLog(msg, type='info'){
@@ -2482,6 +2522,7 @@ async function gpcBuildPdf(){
   const imgFiles=gpcFiles.filter(f=>f.type.startsWith('image/'));
   if(!imgFiles.length) return;
   const btnEl=document.getElementById('gpcPdfBannerBtn');
+  if(!btnEl) return;
   btnEl.innerHTML='<span style="font-size:12px;color:var(--warn)"><span class="spin" style="border-top-color:var(--warn)"></span>Vytvářím...</span>';
   try{
     const sorted=[...imgFiles].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
@@ -2685,7 +2726,7 @@ async function buildPdfFromImages(imgDataList){
   <!-- Topbar -->
   <div class="gpc-topbar">
   <div class="gpc-topbar-inner">
-    <span class="gpc-topbar-logo">tvojepodnikani.cz</span>
+    <span class="gpc-topbar-logo" style="display:flex;align-items:center;gap:8px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="235 221 4350 4350" width="24" height="24"><path d="M4513,2312c0,1155-958,2091-2139,2091c-1181,0-2139-936-2139-2091c0-1155,958-2090,2139-2090l0-63c-1216,0-2202,964-2202,2153c0,1190,986,2154,2202,2154c1217,0,2203-965,2203-2154l-63,0Z" fill="#C8A84B"/><path d="M1926,3025c-158,0-289-50-390-151c-102-100-153-233-153-399l0-1319l340,0l0,406l270,0l0,317l-270,0l0,599c0,69,22,126,65,169c43,44,100,65,170,65l35,0l0,311l-67,0Z" fill="#C8A84B"/><path d="M2107,2241c0-195,74-364,220-506c147-142,325-213,534-213c211,0,388,72,531,217c143,144,214,324,214,540c0,218-72,399-217,546c-145,146-326,219-543,219c-72,0-166-18-282-53l0-338l120,33c28,6,64,9,109,9c149,0,263-36,343-108c80-72,120-176,120-313c0-115-39-212-117-291c-78-79-174-119-288-119c-110,0-204,39-285,117c-80,78-120,174-120,289l0,1383l-340,0l0-1410Z" fill="#C8A84B"/></svg><span>tvojepodnikani.cz</span></span>
     <span class="gpc-topbar-sep">›</span>
     <span class="gpc-topbar-tool">GPC Agent</span>
     <button class="gpc-back" onclick="goHome()" style="margin-left:auto">← Zpět</button>
